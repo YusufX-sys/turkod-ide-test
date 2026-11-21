@@ -11,6 +11,7 @@
 #   arayuz-linux : arayüz (entegrasyon) testleri Linux'ta: uygulama açılır, menülere
 #                  tıklanır, kod yazılır, kısayollara basılır (platformlar/arayuz_testleri.sh)
 #   arayuz-macos : aynı testler macOS'ta (pahalı: önce arayuz-linux ile dene)
+#   arayuz-windows : aynı testler Windows'ta (karşılaştırma için; dakikalar 2 kat sayılır)
 #
 # Özel anahtar BURAYA KONMAZ: paketler --imzasiz derlenir, yalnızca denemek içindir.
 # Sonuçlar (paketler, ekran görüntüleri, günlükler) çalıştırmanın sayfasında
@@ -23,7 +24,7 @@ on:
       hedef:
         description: "Ne çalışsın?"
         type: choice
-        options: [testler, linux, macos, hepsi, arayuz-linux, arayuz-macos]
+        options: [testler, linux, macos, hepsi, arayuz-linux, arayuz-macos, arayuz-windows]
         default: testler
 
 # Proje bu klasörde. Klasörün adı değişirse buradaki ve aşağıdaki
@@ -168,8 +169,8 @@ jobs:
   # Arayüz (entegrasyon) testleri: turkod_flutter/integration_test/*_test.dart
   # Uygulama geliştirici kipinde (python3 -m turkod_ide.server) açılır.
   arayuz:
-    if: inputs.hedef == 'arayuz-linux' || inputs.hedef == 'arayuz-macos'
-    runs-on: ${{ inputs.hedef == 'arayuz-macos' && 'macos-latest' || 'ubuntu-22.04' }}
+    if: startsWith(inputs.hedef, 'arayuz-')
+    runs-on: ${{ inputs.hedef == 'arayuz-macos' && 'macos-latest' || (inputs.hedef == 'arayuz-windows' && 'windows-latest' || 'ubuntu-22.04') }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4

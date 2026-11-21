@@ -41,11 +41,14 @@ Future<bool> _kosulBekle(WidgetTester t, bool Function() kosul, {int sn = 30}) a
 }
 
 /// (ad, TürKod kodu, çıktıda bulunması gerekenler, bulunmaması gerekenler)
-const _programlar = <(String, String, List<String>, List<String>)>[
+// Mutlak yol örneği sisteme göre: "C:/a" yalnızca Windows'ta mutlaktır.
+final _mutlakYol = Platform.isWindows ? 'C:/a' : '/a';
+
+final _programlar = <(String, String, List<String>, List<String>)>[
   (
     'Yeni modül adları (işletim_sistemi, yol)',
     'içe_aktar işletim_sistemi\n'
-        'yazdır(işletim_sistemi.süreç_kimliği_al() > 0, işletim_sistemi.yol.mutlak_mı("C:/a"))\n',
+        'yazdır(işletim_sistemi.süreç_kimliği_al() > 0, işletim_sistemi.yol.mutlak_mı("$_mutlakYol"))\n',
     ['Doğru Doğru'],
     [],
   ),
@@ -63,8 +66,10 @@ const _programlar = <(String, String, List<String>, List<String>)>[
   ),
   (
     'Takma adlı modül (olarak m)',
-    'içe_aktar matematik olarak m\nyazdır(m.küpkök(27), m.ondalıklı_kalan(7, 3))\n',
-    ['3.0 1.0'],
+    // küpkök(27) Linux'ta 3.0000000000000004 çıkar (sistemin matematik kütüphanesi);
+    // küpkök(8) her sistemde tam 2.0'dır.
+    'içe_aktar matematik olarak m\nyazdır(m.küpkök(8), m.ondalıklı_kalan(7, 3))\n',
+    ['2.0 1.0'],
     [],
   ),
   (

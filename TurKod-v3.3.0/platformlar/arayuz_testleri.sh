@@ -22,7 +22,8 @@ SONUC="$(cd "$SONUC" && pwd)"
 case "$(uname -s)" in
     Linux)  CIHAZ="linux" ;;
     Darwin) CIHAZ="macos" ;;
-    *) echo "Bu betik yalnızca Linux ve macOS içindir." >&2; exit 2 ;;
+    MINGW*|MSYS*|CYGWIN*) CIHAZ="windows" ;;   # Git Bash: karşılaştırma için Windows
+    *) echo "Desteklenmeyen sistem: $(uname -s)" >&2; exit 2 ;;
 esac
 
 # --- Ekran: Linux'ta ekransız masaüstü (Xvfb) ------------------------------------
@@ -42,9 +43,9 @@ fi
         dosya="$SONUC/ekranlar/$(printf '%02d' $n).png"
         if [ "$CIHAZ" = "macos" ]; then
             screencapture -x "$dosya" 2>/dev/null
-        else
+        elif [ "$CIHAZ" = "linux" ]; then
             import -window root "$dosya" 2>/dev/null
-        fi
+        fi   # Windows: ekran görüntüsü alınmaz
     done
 ) &
 EKRAN=$!
@@ -68,13 +69,20 @@ calistir() {
         flutter test "integration_test/$dosya" -d "$CIHAZ" 2>&1 | tee "$SONUC/$ad.log"
     local kod=$?
     # Testin profil klasörüne yazdığı rapor dosyaları
-    cp "$profil"/*.txt "$SONUC/" 2>/dev/null
+    local kabuk_yolu="$profil"
+    [ "$CIHAZ" = "windows" ] && command -v cygpath >/dev/null && kabuk_yolu="$(cygpath -u "$profil")"
+    cp "$kabuk_yolu"/*.txt "$SONUC/" 2>/dev/null
     [ $kod -eq 0 ] || COKEN="$COKEN $ad"
 }
 
 # Testler, kullanıcının ayarlarına dokunmamak için adı belli önekle başlayan boş bir
 # profil klasörü ister (testin içindeki güvenlik denetimi).
-yeni_profil() { mktemp -d "${TMPDIR:-/tmp}/$1XXXXXX"; }
+yeni_profil() {
+    local d
+    d="$(mktemp -d "${TMPDIR:-/tmp}/$1XXXXXX")"
+    # Windows'ta uygulamaya Windows yolu verilir (C:\...).
+    if [ "$CIHAZ" = "windows" ] && command -v cygpath >/dev/null; then cygpath -w "$d"; else echo "$d"; fi
+}
 
 PROFIL="$(yeni_profil turkod_eksik_)"
 calistir duzeltmeler-1 duzeltmeler_test.dart "$PROFIL" 1

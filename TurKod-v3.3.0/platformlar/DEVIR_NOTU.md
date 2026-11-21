@@ -122,9 +122,15 @@ dökümü gelmez, ama işin özü bu notta.
 - **Arayüz (entegrasyon) testleri Linux/macOS'ta:** `turkod_flutter/integration_test/`
   testleri kısayolda macOS'ta Cmd basar (`ortak_platform.dart`). Çalıştırıcı:
   `platformlar/arayuz_testleri.sh` (Linux'ta Xvfb; profil klasörleri, OZET.txt, 20 sn'de
-  bir ekran görüntüsü). İş akışı hedefleri: `arayuz-linux`, `arayuz-macos`. Henüz
-  çalıştırılmadı. Yeni senaryo eklemek: integration_test/ altına `*_test.dart`, sonra
-  betikteki listeye bir `calistir` satırı.
+  bir ekran görüntüsü). İş akışı hedefleri: `arayuz-linux`, `arayuz-macos`,
+  `arayuz-windows` (karşılaştırma). Yeni senaryo eklemek: integration_test/ altına
+  `*_test.dart`, sonra betikteki listeye bir `calistir` satırı.
+  İlk `arayuz-linux` (#7, 2026-11-22): testler çalıştı ama 5'i de düştü. Düzeltilen test
+  varsayımları: `mutlak_mı("C:/a")` (yalnızca Windows'ta mutlak) ve `küpkök(27)`
+  (Linux'ta 3.0000000000000004). Kalan: menü öğesine tıklanamama ("would not hit
+  test"), Ctrl+W, Hakkında, Klavye kısayolları penceresi, kurtarma. Önce aynı testlerin
+  Windows'ta geçip geçmediği (`arayuz-windows`) görülmeli: testler 3.3 arayüzüne göre
+  eskimiş olabilir.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
