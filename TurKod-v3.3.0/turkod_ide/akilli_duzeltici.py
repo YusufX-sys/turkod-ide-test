@@ -43,10 +43,12 @@ try:
     from .converter import MODUL_CEVIRILERI, URSINA_NESNELERI, turkce_kodu_donustur
     from .dictionary import SOZLUK, TERS_SOZLUK, _block_words, _keyword_words, kullanici_tanimlari
     from .runner import hata_aciklamasi, hata_turu_adi
+    from . import platform_katmani
 except ImportError:
     from converter import MODUL_CEVIRILERI, URSINA_NESNELERI, turkce_kodu_donustur
     from dictionary import SOZLUK, TERS_SOZLUK, _block_words, _keyword_words, kullanici_tanimlari
     from runner import hata_aciklamasi, hata_turu_adi
+    import platform_katmani
 
 
 ID = r"[^\W\d]\w*"
@@ -648,9 +650,7 @@ class AkilliDuzeltici:
                 bitti = True
             except subprocess.TimeoutExpired:
                 # Alt süreçleriyle birlikte (oyun motorlarının yardımcı süreçleri).
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(surec.pid)],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               timeout=10, **self.core._subprocess_flags())
+                platform_katmani.sureci_agacla_oldur(surec.pid, zaman_asimi=10, sessiz=False)
                 try:
                     _, stderr = surec.communicate(timeout=10)
                 except subprocess.TimeoutExpired:

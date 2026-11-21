@@ -22,8 +22,8 @@ import tempfile
 
 
 def _log_dizini() -> str:
-    taban = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    dizin = os.path.join(taban, "TurKod")
+    from turkod_ide import platform_katmani
+    dizin = platform_katmani.veri_klasoru(yedek=tempfile.gettempdir())
     os.makedirs(dizin, exist_ok=True)
     return dizin
 
@@ -31,7 +31,8 @@ def _log_dizini() -> str:
 def _stdio_logla():
     """console=False derlemede sys.stdout/sys.stderr None olur (uvicorn'un logger'ı
     isatty() çağırıp çöker) ya da okunmayan bir boruya bağlıdır. İkisini de
-    %LOCALAPPDATA%\\TurKod\\backend.log dosyasına yönlendir: açılış sorunlarında
+    TurKod veri klasöründeki backend.log dosyasına yönlendir (Windows'ta
+    %LOCALAPPDATA%\\TurKod\\backend.log): açılış sorunlarında
     nedeni buradan okuyabilirsin."""
     try:
         yol = os.path.join(_log_dizini(), "backend.log")
@@ -69,7 +70,8 @@ else:
 # böylece kullanıcı terminalde `python ...` / `pip install X` yazabilir (pip.cmd
 # build_release.ps1 tarafından oluşturulur).
 if getattr(sys, "frozen", False):
-    _py = os.path.join(os.path.dirname(sys.executable), "_internal", "python_embed")
+    from turkod_ide import platform_katmani as _pk
+    _py = _pk.gomulu_python_yol_dizini()   # Windows: python_embed, Linux/macOS: python_embed/bin
     if os.path.isdir(_py):
         os.environ["PATH"] = _py + os.pathsep + os.environ.get("PATH", "")
 

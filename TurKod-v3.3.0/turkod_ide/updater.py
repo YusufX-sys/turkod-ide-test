@@ -6,11 +6,24 @@ SHA-256'yı latest.json'daki değerle karşılaştır -> dosya yolunu döndür.
 
 Kurulumu backend DEĞİL Flutter başlatır: backend'in alt süreci olarak
 başlatılan kurulum, Flutter kapanırken `taskkill /T` ile birlikte ölür.
+
+Sistemlere göre paketler (tek latest.json, surum_imzala.py üretir):
+    {"version": "3.4.0",
+     "url": ..., "sha256": ..., "size": ...,        <- Windows kurulumu (eski sürümler
+                                                       yalnızca bunları okur)
+     "platforms": {"windows": {...}, "linux-x86_64": {...}, "macos-arm64": {...}}}
+Kurulum türleri:
+    setup    : Windows, Inno Setup kurulumu (Flutter sessiz kurulumu başlatır)
+    appimage : Linux, AppImage dosyası yerinde yenilenir (uygula())
+    dmg      : macOS, yeni .dmg açılır; kullanıcı uygulamayı Uygulamalar'a sürükler
+Linux'ta .tar.gz kurulumu kendini güncelleyemez (kurulabilir: False).
 """
 import hashlib
 import json
 import os
+import platform
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -20,8 +33,12 @@ from pathlib import Path
 
 try:
     from .signing import DijitalImza
+    from . import platform_katmani
+    from .platform_katmani import _posix
 except ImportError:
     from signing import DijitalImza
+    import platform_katmani
+    from platform_katmani import _posix
 
 # latest.json ve latest.json.sig, GitHub'daki EN SON (draft/pre-release olmayan) yayının
 # eklerinden okunur. Depo herkese açık olmalı.
@@ -50,6 +67,44 @@ def mevcut_surum() -> str:
 
 def _tuple(surum: str):
     return tuple(int(p) for p in surum.split("."))
+
+
+# --------------------------------------------------------------------------
+# Hangi paket? (latest.json "platforms" anahtarı ve kurulum türü)
+# --------------------------------------------------------------------------
+def paket_anahtari(makine=None) -> str:
+    """"windows", "linux-x86_64", "linux-aarch64", "macos-arm64", "macos-x86_64".
+    Adlar derleme betiklerinin ürettiği dosya adlarıyla aynıdır."""
+    if platform_katmani.windows_mu():
+        return "windows"
+    m = (makine if makine is not None else platform.machine()).lower()
+    x86 = m in ("x86_64", "amd64", "x64")
+    if platform_katmani.macos_mu():
+        return "macos-" + ("x86_64" if x86 else "arm64")
+    return "linux-" + ("x86_64" if x86 else "aarch64")
+
+
+def kurulum_turu():
+    """Bu kurulum kendini güncelleyebiliyorsa türü ("setup" | "appimage" | "dmg"), değilse None."""
+    if platform_katmani.windows_mu():
+        return "setup"
+    if platform_katmani.macos_mu():
+        return "dmg"
+    return "appimage" if _posix.appimage_yolu() else None
+
+
+_DOSYA_UZANTISI = {"setup": ".exe", "appimage": ".AppImage", "dmg": ".dmg"}
+
+
+def _paket_sec(m: dict):
+    """latest.json'dan bu sistemin paketi: {"url", "sha256", "size"} ya da None."""
+    paketler = m.get("platforms")
+    anahtar = paket_anahtari()
+    if isinstance(paketler, dict) and isinstance(paketler.get(anahtar), dict):
+        return paketler[anahtar]
+    if anahtar == "windows" and "url" in m:
+        return m   # eski biçim: üst düzey alanlar Windows kurulumudur
+    return None
 
 
 def _https_ac(url: str):
@@ -93,29 +148,41 @@ def kontrol_et() -> dict:
 
     try:
         m = json.loads(veri.decode("utf-8"))
-        yeni, url, sha = str(m["version"]), str(m["url"]), str(m["sha256"]).lower()
+        yeni = str(m["version"])
+        paket = _paket_sec(m)
+        if paket is not None:
+            url, sha = str(paket["url"]), str(paket["sha256"]).lower()
     except Exception:
         return {"ok": False, "hata": "Güncelleme bilgisi okunamadı."}
 
-    if not _SURUM_RE.match(yeni) or not _SHA_RE.match(sha) or not url.lower().startswith("https://"):
+    if not _SURUM_RE.match(yeni):
+        return {"ok": False, "hata": "Güncelleme bilgisi geçersiz."}
+    if paket is not None and (not _SHA_RE.match(sha) or not url.lower().startswith("https://")):
         return {"ok": False, "hata": "Güncelleme bilgisi geçersiz."}
 
     mevcut = mevcut_surum()
     var = _tuple(yeni) > _tuple(mevcut) if _SURUM_RE.match(mevcut) else False
+    tur = kurulum_turu()
+    # Yeni sürüm var ama bu sistem için paket yok ya da bu kurulum (Linux .tar.gz)
+    # kendini güncelleyemiyor: arayüz yalnızca "yeni sürüm var" der.
+    kurulabilir = var and paket is not None and tur is not None
 
     try:
-        boyut = int(m.get("size") or 0)
+        boyut = int((paket or {}).get("size") or 0)
     except (TypeError, ValueError):
         boyut = 0
 
     global _son_bildirim
     with _bildirim_kilit:
         _son_bildirim = (
-            {"version": yeni, "url": url, "sha256": sha, "size": boyut} if var else {})
+            {"version": yeni, "url": url, "sha256": sha, "size": boyut, "tur": tur}
+            if kurulabilir else {})
 
     return {
         "ok": True,
         "guncelleme_var": var,
+        "kurulabilir": kurulabilir,
+        "kurulum_turu": tur or "",
         "mevcut": mevcut,
         "yeni": yeni,
         "notlar": str(m.get("notes", ""))[:2000],
@@ -130,11 +197,13 @@ def _indir(m: dict, ilerleme=None) -> dict:
     """Kurulum dosyasını indirir, SHA-256'yı doğrular. Başarıda {"ok": True, "yol": ...}."""
     dizin = Path(tempfile.gettempdir()) / "turkod_guncelleme"
     dizin.mkdir(exist_ok=True)
-    hedef = dizin / f"TurKod-Setup-{m['version']}.exe"
+    tur = m.get("tur") or "setup"
+    on_ek = "TurKod-Setup" if tur == "setup" else "TurKod"
+    hedef = dizin / f"{on_ek}-{m['version']}{_DOSYA_UZANTISI.get(tur, '.exe')}"
     # Önce benzersiz geçici dosyaya indirilir; SHA doğrulanınca hedefe
     # taşınır. Böylece aynı anda iki indirme aynı dosyaya yazamaz ve diskte
     # doğrulanmamış (yarım) bir kurulum dosyası "hazır" görünmez.
-    gecici = dizin / f"TurKod-Setup-{m['version']}.{threading.get_ident()}.part"
+    gecici = dizin / f"{on_ek}-{m['version']}.{threading.get_ident()}.part"
     h = hashlib.sha256()
     indirilen = 0
 
@@ -180,7 +249,7 @@ def _indir(m: dict, ilerleme=None) -> dict:
         hedef = gecici
 
     return {"ok": True, "yol": str(hedef), "surum": m["version"],
-            "sha256": m["sha256"]}
+            "sha256": m["sha256"], "tur": tur}
 
 
 def _yeni_bildirim_hazirla() -> dict:
@@ -214,7 +283,7 @@ def indir_baslat() -> dict:
             return {"ok": True, "durum": "indiriyor"}
         onceki_durum = dict(_indirme)
         _indirme.update(durum="indiriyor", indirilen=0, toplam=0, sha256="",
-                        yol="", hata="", surum="")
+                        yol="", hata="", surum="", tur="")
 
     # Her indirmeden önce en güncel bilgiyi al: "en son sürüm" kurulsun.
     try:
@@ -247,7 +316,7 @@ def indir_baslat() -> dict:
         with _kilit:
             if sonuc.get("ok"):
                 _indirme.update(durum="bitti", yol=sonuc["yol"], hata="",
-                                sha256=sonuc["sha256"])
+                                sha256=sonuc["sha256"], tur=sonuc.get("tur", "setup"))
             else:
                 _indirme.update(durum="hata", hata=sonuc.get("hata", "Bilinmeyen hata"))
 
@@ -282,3 +351,33 @@ def kurulum_dogrula(yol: str) -> dict:
         return {"ok": False, "hata": "Kurulum dosyası indirildikten sonra değiştirilmiş; "
                                      "güvenlik nedeniyle çalıştırılmadı."}
     return {"ok": True}
+
+
+def uygula(yol: str) -> dict:
+    """Linux AppImage: doğrulanmış yeni AppImage, çalışan AppImage dosyasının yerine
+    konur. Çalışan süreç eski dosyayı kullanmayı sürdürür (Linux'ta açık dosya
+    silinse de yaşar); arayüz ardından yeni dosyayı başlatıp kapanır.
+    Başarıda {"ok": True, "baslat": <AppImage yolu>}."""
+    with _kilit:
+        tur = _indirme.get("tur")
+    if tur != "appimage":
+        return {"ok": False, "hata": "Bu güncelleme uygulama içinden kurulamaz."}
+    hedef = _posix.appimage_yolu()
+    if not hedef:
+        return {"ok": False, "hata": "TürKod bir AppImage dosyasından çalışmıyor."}
+    d = kurulum_dogrula(yol)
+    if not d.get("ok"):
+        return d
+    gecici = hedef + ".yeni"
+    try:
+        shutil.copyfile(yol, gecici)
+        os.chmod(gecici, 0o755)
+        os.replace(gecici, hedef)
+    except OSError as e:
+        try:
+            os.remove(gecici)
+        except OSError:
+            pass
+        return {"ok": False, "hata": f"TürKod dosyası yenilenemedi ({e}). Dosyanın "
+                                     "bulunduğu klasöre yazma iznin olduğundan emin ol."}
+    return {"ok": True, "baslat": hedef}

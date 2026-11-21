@@ -320,6 +320,13 @@ class TarayiciDurumu extends ChangeNotifier {
   Future<void> baslat() => _baslatma ??= _baslat();
 
   Future<void> _baslat() async {
+    if (!gomuluTarayiciVar()) {
+      // WebView2 yalnızca Windows'ta: sayfalar bilgisayarın kendi tarayıcısında açılır.
+      hata = "IDE içindeki tarayıcı şimdilik yalnızca Windows'ta var. "
+          'Sayfaları bilgisayarının kendi tarayıcısında açabilirsin.';
+      notifyListeners();
+      return;
+    }
     final kusak = _kusak;
     WebviewController? yeni;
     try {
@@ -427,6 +434,10 @@ class TarayiciDurumu extends ChangeNotifier {
   }
 
   Future<void> git(String yazi) async {
+    if (!gomuluTarayiciVar()) {
+      await disaridaAc(tarayiciAdresi(yazi));
+      return;
+    }
     await baslat();
     await denetci?.loadUrl(tarayiciAdresi(yazi));
   }
@@ -784,7 +795,18 @@ class _TarayiciSekmesiState extends State<TarayiciSekmesi> {
       sayfa = Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(t.hata!, textAlign: TextAlign.center, style: TextStyle(color: cs.error)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(t.hata!, textAlign: TextAlign.center, style: TextStyle(color: cs.error)),
+            if (!gomuluTarayiciVar()) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('Tarayıcıda aç'),
+                onPressed: () => disaridaAc(
+                    _adres.text.trim().isEmpty ? kTarayiciAnaSayfa : tarayiciAdresi(_adres.text)),
+              ),
+            ],
+          ]),
         ),
       );
     } else if (c == null) {

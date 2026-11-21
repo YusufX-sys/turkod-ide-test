@@ -981,7 +981,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
           child: SingleChildScrollView(
             reverse: true,
             child: SelectableText(gunluk.join('\n'),
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: kMonoFontFamily,
                     fontFamilyFallback: kMonoFontFallback,
                     fontSize: 10.5)),
@@ -1102,7 +1102,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
       TextField(
         controller: _dizinCtrl,
         focusNode: _dizinOdak,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 12, fontFamily: kMonoFontFamily, fontFamilyFallback: kMonoFontFallback),
         decoration: InputDecoration(
           isDense: true,
@@ -1715,7 +1715,7 @@ class _KaralamaDialogState extends State<_KaralamaDialog> {
             maxLines: null,
             expands: true,
             onChanged: _degisti,
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: kMonoFontFamily, fontFamilyFallback: kMonoFontFallback, fontSize: 13),
             decoration: const InputDecoration(
                 border: InputBorder.none,
@@ -2032,7 +2032,7 @@ class _ParcacikDialogState extends State<_ParcacikDialog> {
               child: SingleChildScrollView(
                 child: SelectableText(
                   liste.isEmpty ? '' : liste[_secili].$2.replaceAll(r'$0', '▌'),
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: kMonoFontFamily,
                       fontFamilyFallback: kMonoFontFallback,
                       fontSize: 12.5),

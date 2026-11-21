@@ -409,7 +409,7 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
                   Expanded(
                     child: SelectableText(
                       komut,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: kMonoFontFamily,
                           fontFamilyFallback: kMonoFontFallback,
                           fontSize: 12.5,

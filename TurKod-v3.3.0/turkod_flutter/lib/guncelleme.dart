@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'platform_ayarlari.dart';
+
 /// backend.call ile aynı imza (main.dart'ı import etmemek için).
 typedef BackendCagri = Future<Map<String, dynamic>> Function(String command,
     [Map<String, dynamic> params]);
@@ -68,7 +70,13 @@ Future<void> guncellemeKontrolEt(
     return;
   }
   if (!context.mounted) return;
-  await _guncelle(context, cagir, kaydet);
+  // Sunucu bu kurulumun kendini güncelleyip güncelleyemeyeceğini ve nasıl
+  // (setup / appimage / dmg) güncelleyeceğini söyler (updater.kurulum_turu).
+  await _guncelle(context, cagir, kaydet,
+      kurulabilir: r['kurulabilir'] is bool ? r['kurulabilir'] as bool : Platform.isWindows,
+      tur: (r['kurulum_turu'] ?? '').toString().isEmpty
+          ? 'setup'
+          : r['kurulum_turu'].toString());
 }
 
 // ---------------------------------------------------------------------------
@@ -76,9 +84,7 @@ Future<void> guncellemeKontrolEt(
 // ---------------------------------------------------------------------------
 File _atlananDosya() {
   final s = Platform.pathSeparator;
-  final taban =
-      Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
-  return File('$taban${s}TurKod${s}atlanan_surum.txt');
+  return File('${veriKlasoru()}${s}atlanan_surum.txt');
 }
 
 String _atlananOku() {
@@ -110,7 +116,21 @@ String _hataMetni(Object e) {
 // Güncelleme akışı: indir + doğrula -> kaydet -> kurulumu başlat -> çık
 // ---------------------------------------------------------------------------
 Future<void> _guncelle(BuildContext context, BackendCagri cagir,
-    Future<bool> Function()? kaydet) async {
+    Future<bool> Function()? kaydet,
+    {required bool kurulabilir, required String tur}) async {
+  if (!kurulabilir) {
+    // Bu sistem için paket yok ya da bu kurulum (Linux .tar.gz) kendini
+    // güncelleyemiyor: yeni sürüm elle kurulur.
+    await _bilgiPaneli(
+      context,
+      ikon: Icons.system_update_alt,
+      ikonRenk: Colors.blue,
+      baslik: 'Yeni sürüm var',
+      metin: 'Bu bilgisayarda TürKod kendini güncelleyemiyor. Yeni sürümü '
+          "TürKod'un indirme sayfasından indirip kurabilirsin.",
+    );
+    return;
+  }
   final ilerleme = ValueNotifier<double?>(0);
   final metin = ValueNotifier<String>('Güncelleme indiriliyor...');
 
@@ -229,8 +249,25 @@ Future<void> _guncelle(BuildContext context, BackendCagri cagir,
   try {
     // Kayıt sırasında beklenirken %TEMP%'teki dosya değiştirilmiş olabilir:
     // çalıştırmadan hemen önce SHA-256 yeniden doğrulanır (ok:false -> hata).
-    await cagir('guncelleme_kurulum_dogrula', {'yol': yol});
-    await _kurulumuBaslat(yol);
+    switch (tur) {
+      case 'appimage':
+        // Linux: yeni AppImage çalışanın yerine konur (sunucu SHA-256'yı yeniden
+        // doğrular), sonra yeni sürüm başlatılıp bu süreç kapanır.
+        final r = await cagir('guncelleme_uygula', {'yol': yol});
+        final baslat = (r['baslat'] ?? '').toString();
+        if (baslat.isEmpty) throw StateError('Yeni TürKod dosyası bulunamadı.');
+        await Process.start(baslat, const [], mode: ProcessStartMode.detached);
+      case 'dmg':
+        // macOS: yeni .dmg açılır; kullanıcı TürKod'u Uygulamalar klasörüne
+        // sürükler. Uygulama açıkken değiştirilemeyeceği için TürKod kapanır.
+        await cagir('guncelleme_kurulum_dogrula', {'yol': yol});
+        await Process.start('open', [yol], mode: ProcessStartMode.detached);
+        metin.value = "Açılan pencerede TürKod'u Uygulamalar klasörüne sürükle.";
+        await Future<void>.delayed(const Duration(seconds: 3));
+      default:
+        await cagir('guncelleme_kurulum_dogrula', {'yol': yol});
+        await _kurulumuBaslat(yol);
+    }
   } catch (e) {
     kapat();
     if (context.mounted) {

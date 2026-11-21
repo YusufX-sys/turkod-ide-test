@@ -1,5 +1,5 @@
 {
-  "version": "3.3.0",
+  "version": "4.0.0",
   "files": [
     {
       "path": "__init__.py",
@@ -8,13 +8,13 @@
     },
     {
       "path": "ai.py",
-      "sha256": "8b8438fdeb6cc7f81613ff4dabf9e53ac0ae98fe2e3b582ab35a1670e20ef003",
-      "size": 50876
+      "sha256": "defab1458609574e2839727cb138e85c361ebbd9221a914cb00dcb48f2762c03",
+      "size": 50926
     },
     {
       "path": "akilli_duzeltici.py",
-      "sha256": "75b80bc3ae336e7346e6301f32681dccb12252d1ab8d3b653884e9141a38d915",
-      "size": 157835
+      "sha256": "5aeafb45fdefb4bd4730957a0a5958b40da421c74e55aef91a0332656b065695",
+      "size": 157750
     },
     {
       "path": "ast_katmani.py",
@@ -23,8 +23,8 @@
     },
     {
       "path": "calistirici.py",
-      "sha256": "72957b2068df1f2425ab87be667a1f59ef2f7dafd22fff2af3a877598144624e",
-      "size": 56998
+      "sha256": "625a7093a0840c810b81b62585d5a21a93dc28869c1d748040c4fad29d1d8834",
+      "size": 54958
     },
     {
       "path": "cikti_cevirici.py",
@@ -58,13 +58,13 @@
     },
     {
       "path": "entegrasyon.py",
-      "sha256": "07917925b94885236aa0b812bbc2aff5e2795526487b3d5d5856d26fd47d3927",
-      "size": 9668
+      "sha256": "cdd6eb803c26d93916d337dbc2697477cac2be7b631f1dfee18afb472c82844c",
+      "size": 1395
     },
     {
       "path": "exe_donusturucu.py",
-      "sha256": "27f9eb20ee619bb9887d7f4811a083de84b81cd4e108f4d14bd3b8e54e79fcee",
-      "size": 53036
+      "sha256": "d3645f3c06e40f5f948ae87b7276b917576e2fa8ba878fff277c760c8d7e87c6",
+      "size": 53030
     },
     {
       "path": "exe_terminali.py",
@@ -78,13 +78,13 @@
     },
     {
       "path": "ide_core.py",
-      "sha256": "845e4023d26808d23f4c263b3b128232e8dda354285ff712fc40a39a0662dada",
-      "size": 277864
+      "sha256": "b7d9c134f4ae87c7da8c8b01079f27d646358335727f62d87c270584985b8754",
+      "size": 276741
     },
     {
       "path": "kabuk.py",
-      "sha256": "f7b0d86084db6649e1434622e68e6f23315b5283058b2bb0e1d0eeef3f8f3745",
-      "size": 28575
+      "sha256": "3625590477aaebfb7457deb384746153a1f505005cb65b883ac13cc7c2355473",
+      "size": 28591
     },
     {
       "path": "kod_araclari.py",
@@ -98,8 +98,8 @@
     },
     {
       "path": "kodi_goruntu.py",
-      "sha256": "e65d4d646c51b9c2eada04f7dfdcf10da35ef3b4b83d68ebab46521e3539c4e6",
-      "size": 2335
+      "sha256": "7a92b5a624ad18a15abcb23095b735b47c283178856531ee5161a1ca54c48599",
+      "size": 2434
     },
     {
       "path": "kodi_hafiza.py",
@@ -118,8 +118,8 @@
     },
     {
       "path": "kodi_ses.py",
-      "sha256": "afa1dcef03beae392b2958755c3fd0336817341a4193608762b1ecd10f5cbba7",
-      "size": 9245
+      "sha256": "75571e06edd1c2481808974eaa7e2006e3dfe4a51d913fc36d2876cf4bfc195c",
+      "size": 7947
     },
     {
       "path": "kodi_yerel.py",
@@ -143,13 +143,43 @@
     },
     {
       "path": "paths.py",
-      "sha256": "ae057994f237121a93f8797a00394746185e17b1a34a2971f38a8a3f682c9639",
-      "size": 1673
+      "sha256": "02b50ca83936118593af868d971bf292798c05012b146da2f85e6e904da59459",
+      "size": 1681
     },
     {
       "path": "pip_tr.py",
       "sha256": "0cbbf81e9edc5c06e066bab8894ca8d3e1f14b80639ae64064b33da46af1b612",
       "size": 7871
+    },
+    {
+      "path": "platform_katmani/__init__.py",
+      "sha256": "70f080cf5be4d03272b1ea422ac0938ad7af9f0c8dd0aca18a29ff42e601f447",
+      "size": 6292
+    },
+    {
+      "path": "platform_katmani/_ortak.py",
+      "sha256": "7f0edfd8a9c276b2d7328498dfe246c4355e1f5557a91c60f066e89232fc9915",
+      "size": 1144
+    },
+    {
+      "path": "platform_katmani/_posix.py",
+      "sha256": "b83298e72acfcdfe2b6883a84fb252d0df682d91e60d5383bf09dfacd5641e6c",
+      "size": 9487
+    },
+    {
+      "path": "platform_katmani/linux.py",
+      "sha256": "b1e1993bf108aa9e1cc0acfaaaa2da92c00c856bf5419e07bec6faadca42d1b6",
+      "size": 5500
+    },
+    {
+      "path": "platform_katmani/macos.py",
+      "sha256": "67b2784406990c92a97c3af83c53bb200a736c2fc2f85b2367471b09addce12c",
+      "size": 3323
+    },
+    {
+      "path": "platform_katmani/windows.py",
+      "sha256": "78b1888144e36a5bfac6e986d67bc652f57582b278d953d5d304f1b86a6981bf",
+      "size": 18351
     },
     {
       "path": "program-logo.ico",
@@ -168,13 +198,13 @@
     },
     {
       "path": "server.py",
-      "sha256": "1aa9b8afddf4a823e6568c38860bb585e66566702e7e46a1f71281e8624968fe",
-      "size": 32489
+      "sha256": "9d42f1f6b922f5c2a968a3d26c9b7f132e74c94f1b14413fc753b9ca9881d6d5",
+      "size": 32699
     },
     {
       "path": "settings.py",
-      "sha256": "8fc66bd74f26a6c5686abc5464aa6174a626352290b1e5dfdb65fd4c5e9cf883",
-      "size": 12232
+      "sha256": "5b892e48f34b88804910e4f268957a5fd9573222355f44365aceb7a9ffa1d4e3",
+      "size": 11418
     },
     {
       "path": "signing.py",
@@ -183,8 +213,8 @@
     },
     {
       "path": "surec_izleyici.py",
-      "sha256": "00f976a866df336e015fe6b92adb9ccb625b92fcc1fa74b1334f212e67cd3c1a",
-      "size": 2289
+      "sha256": "fae8655bc1c39c995075b7612e1f3093f8aafd2a9ec39e4d73561e76721420e4",
+      "size": 1078
     },
     {
       "path": "tablo_tutarlilik.py",
@@ -223,13 +253,13 @@
     },
     {
       "path": "updater.py",
-      "sha256": "ca9ae8af9745587f9d6b678c2a3291576aef12b5ca6d9863a3e92eb5bd021090",
-      "size": 10163
+      "sha256": "588e7ec16d5bf4f896661a1504f610b4541e5e0618ed4d02f9843445df5956b6",
+      "size": 14468
     },
     {
       "path": "yerel_modeller.py",
-      "sha256": "51d72076010c4597c288be4ba4de51e127f161659f3ff1aff2e49cc67a0caf5b",
-      "size": 61583
+      "sha256": "f25f3b5ef99bf94027830b340eb7a32179deffb79dfcfdf6e244ba186997e092",
+      "size": 61661
     },
     {
       "path": "yerel_sunucu.py",

@@ -28,9 +28,11 @@ import threading
 import time
 
 try:
+    from . import platform_katmani
     from .runner import runner_kodu_uret
     from .cikti_cevirici import SatirCevirici
 except ImportError:
+    import platform_katmani
     from runner import runner_kodu_uret
     from cikti_cevirici import SatirCevirici
 
@@ -79,7 +81,7 @@ def konsol_kimligi_ayarla(baslik="TürKod Terminali"):
     çubuğunda Başlat menüsündeki "TürKod Terminali" kısayoluyla gruplanır.
     (Geliştirici kipinde süreç python.exe olduğundan pencere eskiden Python
     simgesiyle görünüyordu.)"""
-    if os.name != "nt":
+    if not platform_katmani.windows_mu():
         return
     try:
         import ctypes
@@ -162,19 +164,7 @@ def _pencere_kimligi_ayarla(hwnd, kimlik, ikon=None, ad=None, komut=None):
 
 def python_exe_bul():
     """ide_core.IDECore._python_exe_bul ile aynı kural (IDECore'u yüklemeden)."""
-    python_exe = None
-    if _paketli_mi():
-        embed = os.path.join(os.path.dirname(sys.executable),
-                             "_internal", "python_embed", "python.exe")
-        if os.path.exists(embed):
-            python_exe = embed
-    if not python_exe:
-        python_exe = shutil.which("python.exe") or shutil.which("python")
-    if not python_exe and not _paketli_mi():
-        python_exe = sys.executable
-    if python_exe and python_exe.lower().endswith("pythonw.exe"):
-        python_exe = python_exe[:-len("pythonw.exe")] + "python.exe"
-    return python_exe
+    return platform_katmani.kullanici_python_bul()
 
 
 def _ortam():
@@ -185,8 +175,7 @@ def _ortam():
     # sürümler ayrıştığında tkinter/turtle init.tcl hatasıyla açılmaz.
     for _anahtar in ("TCL_LIBRARY", "TK_LIBRARY"):
         env.pop(_anahtar, None)
-    base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
-    pkg = os.path.join(base, "TurKod", "pip_packages")
+    pkg = os.path.join(platform_katmani.veri_klasoru(), "pip_packages")
     try:
         os.makedirs(pkg, exist_ok=True)
     except OSError:
@@ -198,10 +187,11 @@ def _ortam():
 
 
 def editor_exe_bul():
-    """<kurulum>\\turkod_flutter.exe (backend\\ klasörünün bir üstü)."""
+    """<kurulum>\\turkod_flutter.exe (backend\\ klasörünün bir üstü); Linux ve
+    macOS yolları platform katmanında."""
     if not _paketli_mi():
         return None
-    yol = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), "turkod_flutter.exe")
+    yol = platform_katmani.editor_dosyasi()
     return yol if os.path.exists(yol) else None
 
 
@@ -209,24 +199,9 @@ def editorde_ac(dosyalar=()):
     exe = editor_exe_bul()
     if not exe:
         return False
-    try:
-        # Açık editör varsa yeni süreç dosyayı ona iletip onu öne getirir;
-        # bunun için öne getirme izni bu (ön plandaki) süreçten devredilir.
-        import ctypes
-        ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        # "cmd /c start" aracılığıyla: editör bu sürecin ALT süreci olmaz. Kurulum
-        # / güncelleme 'taskkill /T /IM turkod_backend.exe' ile terminal
-        # pencerelerini kapatırken açık editörü kaydetmeden öldürmesin.
-        # Her yol tırnaklanır: '&' içeren klasör adları cmd'yi bölmesin.
-        komut = 'cmd.exe /d /c start "" ' + " ".join(f'"{y}"' for y in (exe, *dosyalar))
-        subprocess.Popen(komut, cwd=os.path.dirname(exe), close_fds=True,
-                         creationflags=CREATE_NO_WINDOW)
-        return True
-    except OSError:
-        return False
+    # Editör bu sürecin ALT süreci olarak başlatılmaz: kurulum / güncelleme
+    # terminal pencerelerini kapatırken açık editörü kaydetmeden öldürmesin.
+    return platform_katmani.editoru_ayri_baslat(exe, dosyalar)
 
 
 # Geçici çalışma klasörünü oluşturan sürecin PID'i (ide_core da aynı adı yazar).
@@ -234,25 +209,7 @@ SAHIP_DOSYASI = ".turkod_sahip"
 
 
 def _surec_yasiyor(pid):
-    if os.name != "nt":
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError:
-            return False
-    import ctypes
-    k32 = ctypes.windll.kernel32
-    h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if not h:
-        # Erişim engeli: süreç var ama sorgulanamıyor -> yaşıyor say.
-        return ctypes.GetLastError() == 5
-    try:
-        kod = ctypes.c_ulong()
-        if not k32.GetExitCodeProcess(h, ctypes.byref(kod)):
-            return True
-        return kod.value == 259  # STILL_ACTIVE
-    finally:
-        k32.CloseHandle(h)
+    return platform_katmani.surec_yasiyor(pid)
 
 
 def _sahibi_yasiyor(yol):
@@ -414,12 +371,7 @@ class Hazirlik:
 
 
 def _agaci_sonlandir(pid):
-    try:
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                       creationflags=CREATE_NO_WINDOW, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:  # noqa: BLE001
-        pass
+    platform_katmani.sureci_agacla_oldur(pid, zaman_asimi=5, sessiz=True)
 
 
 def _hata_metni(hatalar):
@@ -465,7 +417,7 @@ Diğer:
 
 
 def _konsol_hazirla():
-    if os.name != "nt":
+    if not platform_katmani.windows_mu():
         return
     try:
         import ctypes
@@ -649,7 +601,8 @@ def dosya_turkoda(yol, yaz=_yazdir):
 def kabuk_penceresi_ac():
     """TürKod Kabuğu'nu yeni bir konsol penceresinde başlatır."""
     if _paketli_mi():
-        exe = os.path.join(os.path.dirname(sys.executable), "turkod.exe")
+        ad = "turkod.exe" if platform_katmani.windows_mu() else "turkod"
+        exe = os.path.join(os.path.dirname(sys.executable), ad)
         komut = [exe if os.path.exists(exe) else sys.executable, "kabuk"]
         cwd = os.path.expanduser("~")
     else:
@@ -657,12 +610,7 @@ def kabuk_penceresi_ac():
         komut = [sys.executable, "-X", "utf8", os.path.join(kok, "backend_main.py"),
                  "--turkod", "kabuk"]
         cwd = os.getcwd()
-    try:
-        subprocess.Popen(komut, cwd=cwd, close_fds=True,
-                         creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
-        return True
-    except OSError:
-        return False
+    return platform_katmani.terminalde_ac(komut, cwd)
 
 
 _ARACLAR = {
@@ -709,7 +657,7 @@ def cli_main(argv):
         _konsol_hazirla()
         konsol = bool(getattr(sys.stdout, "isatty", lambda: False)())
         if konsol:
-            os.system("cls" if os.name == "nt" else "clear")
+            platform_katmani.ekrani_temizle()
         try:
             from . import logo_ascii
         except ImportError:
@@ -1375,7 +1323,7 @@ class TerminalPenceresi:
             self.surec = subprocess.Popen(
                 h.komut, cwd=h.cwd, env=_ortam(), stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
-                creationflags=CREATE_NO_WINDOW)
+                **platform_katmani.gizli_surec_ayarlari())
         except OSError as e:
             h.temizle()
             self._yaz(_hata_metni([f"Program başlatılamadı: {e}"]), "hata")

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TürKod sunucusu (turkod_backend, turkod) ve gömülü Python (python_embed/bin/python3.x)
+  için imza izinleri. build_macos.sh bu dosyayı yalnızca çalıştırılabilir Mach-O
+  dosyalarına verir; .dylib / .so dosyaları izinsiz imzalanır.
+
+  - allow-unsigned-executable-memory: ctypes/libffi ve bazı kütüphaneler (pygame,
+    numpy) çalışma sırasında yazılabilir+çalıştırılabilir bellek ister.
+  - disable-library-validation: kullanıcının sonradan `pip yükle` ile kurduğu
+    paketlerin .so dosyaları TürKod'un kimliğiyle imzalı değildir; bu izin olmadan
+    Python onları yükleyemez.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

@@ -3,10 +3,18 @@
 #     pyinstaller --noconfirm --clean turkod_backend.spec
 #
 # Gereksinim: PyInstaller >= 6.0. Onedir çıktısı  backend\turkod_backend.exe +
-# backend\_internal\  düzeninde olur; ide_core._python_exe_bul()
-# backend\_internal\python_embed\python.exe yolunu bekliyor.
+# backend\_internal\  düzeninde olur. Kullanıcı programlarını çalıştıran Python
+# sonradan backend\_internal\python_embed\ altına konur (platform_katmani.
+# kullanici_python_bul): Windows'ta python.exe (build_release.ps1), Linux ve
+# macOS'ta bin/python3 (platformlar/python_embed_hazirla.sh). Bu tanım üç
+# sistemde de kullanılır; her paket kendi sisteminde derlenir.
 import os
+import sys
 from PyInstaller.utils.hooks import collect_all
+
+# .ico simgeleri yalnızca Windows çalıştırılabilir dosyalarına gömülür; Linux'ta
+# yok sayılır, macOS'ta .icns ister (uygulama simgesi .app paketinden gelir).
+WINDOWS = sys.platform == "win32"
 
 KOK = os.path.abspath(SPECPATH)
 PAKET = os.path.join(KOK, "turkod_ide")
@@ -90,7 +98,7 @@ exe = EXE(
     name="turkod_backend",
     console=False,          # siyah pencere açılmasın
     upx=False,              # UPX: antivirüs yanlış pozitifi + imza sorunları
-    icon=os.path.join(PAKET, "turkod.ico"),
+    icon=os.path.join(PAKET, "turkod.ico") if WINDOWS else None,
 )
 
 # PATH'e eklenen `turkod` komutu: aynı giriş noktası, konsollu. backend_main.py
@@ -105,7 +113,7 @@ exe_konsol = EXE(
     upx=False,
     # Eskiden .trpy belge simgesi kullanılıyordu; kabuk penceresi ve görev
     # çubuğu için kendi terminal simgesi.
-    icon=TERMINAL_IKON,
+    icon=TERMINAL_IKON if WINDOWS else None,
 )
 
 coll = COLLECT(

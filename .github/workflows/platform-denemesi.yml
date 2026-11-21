@@ -1,0 +1,162 @@
+# TürKod — Linux ve macOS denemesi (GitHub'ın sanal makinelerinde).
+#
+# Yalnızca ELLE başlatılır: Actions sekmesi → "Platform denemesi" → Run workflow →
+# "hedef" seç. Özel (private) depoda her çalıştırma aylık ücretsiz dakikadan düşer
+# ve macOS dakikaları daha pahalı sayılır; önce "testler" ile başla.
+#
+#   testler : Python testleri gerçek Ubuntu ve macOS'ta (en ucuzu)
+#   linux   : AppImage derlenir, duman testi + ekran görüntüsü
+#   macos   : TurKod.app + .dmg derlenir (yerel/ad-hoc imza), duman testi + ekran görüntüsü
+#   hepsi   : üçü birden
+#
+# Özel anahtar BURAYA KONMAZ: paketler --imzasiz derlenir, yalnızca denemek içindir.
+# Sonuçlar (paketler, ekran görüntüleri, günlükler) çalıştırmanın sayfasında
+# "Artifacts" altında 3 gün durur.
+name: Platform denemesi
+
+on:
+  workflow_dispatch:
+    inputs:
+      hedef:
+        description: "Ne çalışsın?"
+        type: choice
+        options: [testler, linux, macos, hepsi]
+        default: testler
+
+# Proje bu klasörde. Klasörün adı değişirse buradaki ve aşağıdaki
+# "TurKod-v3.3.0/" yollarını birlikte değiştir.
+defaults:
+  run:
+    shell: bash
+    working-directory: TurKod-v3.3.0
+
+env:
+  PYTHONUTF8: "1"
+  FLUTTER_SURUMU: "3.47.4"   # bu bilgisayardaki Flutter ile aynı
+
+jobs:
+  # ---------------------------------------------------------------------------
+  testler:
+    if: inputs.hedef == 'testler' || inputs.hedef == 'hepsi'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python paketleri
+        run: python -m pip install -r ../requirements.txt pytest
+      - name: Ekransız pencere sunucusu (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Python testleri
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a python -m pytest tests -q -p no:cacheprovider --ignore=tests/e2e_backend.py
+          else
+            python -m pytest tests -q -p no:cacheprovider --ignore=tests/e2e_backend.py
+          fi
+
+  # ---------------------------------------------------------------------------
+  linux:
+    if: inputs.hedef == 'linux' || inputs.hedef == 'hepsi'
+    # 22.04: daha eski glibc ile derlenen AppImage daha çok dağıtımda açılır.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sistem paketleri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
+            xvfb imagemagick libfuse2 file
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_SURUMU }}
+          cache: true
+      - name: Python paketleri
+        run: python -m pip install -r ../requirements.txt
+      - name: Derle (AppImage + .tar.gz)
+        run: bash platformlar/linux/build_linux.sh --imzasiz
+      - name: Uygulamayı aç ve ekran görüntüsü al
+        if: success()
+        continue-on-error: true
+        run: |
+          mkdir -p ../sonuc
+          xvfb-run -a -s "-screen 0 1400x900x24" bash -c '
+            dist/linux/TurKod/turkod_flutter > ../sonuc/arayuz-linux.log 2>&1 &
+            sleep 45
+            import -window root ../sonuc/ekran-linux.png
+            kill %1 2>/dev/null || true'
+      - name: Günlükleri topla
+        if: always()
+        run: |
+          mkdir -p ../sonuc
+          cp ~/.local/share/TurKod/backend.log ../sonuc/backend-linux.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-sonuc
+          path: sonuc/
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: linux-appimage
+          path: TurKod-v3.3.0/dist/*.AppImage
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  macos:
+    if: inputs.hedef == 'macos' || inputs.hedef == 'hepsi'
+    runs-on: macos-14        # Apple Silicon (arm64)
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_SURUMU }}
+          cache: true
+      - name: Python paketleri
+        run: python -m pip install -r ../requirements.txt
+      - name: Derle (TurKod.app + .dmg, yerel imza)
+        run: bash platformlar/macos/build_macos.sh --imzasiz
+      - name: Uygulamayı aç ve ekran görüntüsü al
+        if: success()
+        continue-on-error: true
+        run: |
+          mkdir -p ../sonuc
+          open dist/macos/TurKod.app
+          sleep 45
+          screencapture -x ../sonuc/ekran-macos.png
+          osascript -e 'quit app "TurKod"' || true
+      - name: Günlükleri topla
+        if: always()
+        run: |
+          mkdir -p ../sonuc
+          cp ~/Library/Application\ Support/TurKod/backend.log ../sonuc/backend-macos.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-sonuc
+          path: sonuc/
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: macos-dmg
+          path: TurKod-v3.3.0/dist/*.dmg
+          retention-days: 3

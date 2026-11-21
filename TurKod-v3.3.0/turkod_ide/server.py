@@ -56,9 +56,11 @@ def _anahtar_dogru_mu(anahtar: str) -> bool:
 try:
     from .ide_core import IDECore
     from . import entegrasyon
+    from . import platform_katmani
 except ImportError:
     from ide_core import IDECore
     import entegrasyon
+    import platform_katmani
 
 
 app = FastAPI(title="TürKod Backend")
@@ -516,6 +518,9 @@ SYNC_COMMANDS["guncelleme_indir_baslat"] = lambda params: updater.indir_baslat()
 SYNC_COMMANDS["guncelleme_indir_durum"] = lambda params: updater.indir_durum()
 SYNC_COMMANDS["guncelleme_kurulum_dogrula"] = \
     lambda params: updater.kurulum_dogrula(str(params.get("yol") or ""))
+# Linux AppImage: yeni AppImage'ı çalışanın yerine koyar (Windows/macOS kullanmaz).
+SYNC_COMMANDS["guncelleme_uygula"] = \
+    lambda params: updater.uygula(str(params.get("yol") or ""))
 
 # Ağa çıkan / uzun süren komutlar ayrı havuzda çalışır. Varsayılan havuz
 # küçük (min(32, çekirdek+4)); birkaç AI isteği + takılan bir güncelleme
@@ -894,8 +899,7 @@ def main():
     # uvicorn log config'i None stream üzerinde çöker.
     if sys.stdout is None or sys.stderr is None:
         try:
-            base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-            dizin = os.path.join(base, "TurKod")
+            dizin = platform_katmani.veri_klasoru(yedek=tempfile.gettempdir())
             os.makedirs(dizin, exist_ok=True)
             log = open(os.path.join(dizin, "backend.log"), "a",
                        encoding="utf-8", errors="replace")

@@ -45,6 +45,7 @@ try:
     from . import kodi_hafiza
     from . import kodi_goruntu
     from . import kodi_ses
+    from . import platform_katmani
     from .calistirici import surum as program_surumu
     from .ai import AI_MODELLERI, AIIstekHatasi, saglayici_kimligi
 except ImportError:
@@ -71,6 +72,7 @@ except ImportError:
     import kodi_hafiza
     import kodi_goruntu
     import kodi_ses
+    import platform_katmani
     from calistirici import surum as program_surumu
     from ai import AI_MODELLERI, AIIstekHatasi, saglayici_kimligi
 
@@ -426,12 +428,9 @@ class IDECore:
 
     @staticmethod
     def _subprocess_flags():
-        if os.name == "nt":
-            return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
-        return {}
+        return platform_katmani.gizli_surec_ayarlari()
     def _kullanici_paket_yolu(self):
-        base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
-        yol = os.path.join(base, "TurKod", "pip_packages")
+        yol = os.path.join(platform_katmani.veri_klasoru(), "pip_packages")
         try:
             os.makedirs(yol, exist_ok=True)
         except OSError:
@@ -451,27 +450,13 @@ class IDECore:
         env["PYTHONIOENCODING"] = "utf-8"
         return env
     def _python_exe_bul(self):
-        python_exe = None
-
-        if getattr(sys, "frozen", False):
-            embed = os.path.join(os.path.dirname(sys.executable),
-                                 "_internal", "python_embed", "python.exe")
-            if os.path.exists(embed):
-                python_exe = embed
-
-        if not python_exe:
-            python_exe = shutil.which("python.exe") or shutil.which("python")
-
-        if not python_exe and not getattr(sys, "frozen", False):
-            python_exe = sys.executable
-
-        if python_exe and python_exe.endswith("pythonw.exe"):
-            python_exe = python_exe.replace("pythonw.exe", "python.exe")
+        # Kural platform katmanında (gömülü python_embed, yoksa PATH'teki Python).
+        python_exe = platform_katmani.kullanici_python_bul()
 
         if not python_exe:
             return None, (
                 "Python bulunamadı. Python 3.x kurun ve PATH'e ekleyin. "
-                "Veya _internal/python_embed/python.exe ekleyin."
+                f"Veya {platform_katmani.gomulu_python_goreli()} ekleyin."
             )
 
         return python_exe, ""
@@ -831,7 +816,7 @@ class IDECore:
         "başarılı" dönüyordu."""
         if not yol or not os.path.exists(yol):
             return {"ok": False, "hata": "Öğe bulunamadı."}
-        if os.name != "nt":
+        if not platform_katmani.windows_mu():
             return {"ok": False, "hata": "Silme yalnızca Windows'ta destekleniyor."}
         if kalici:
             try:
@@ -1355,7 +1340,7 @@ class IDECore:
         # 0) Windows: GDI ile doğrudan numaralandırma. tkinter yolu görünmez
         #    bir Tk penceresi açıp Tcl/Tk'yı kalıcı olarak belleğe yüklüyordu;
         #    bu yol hafiftir ve ek kütüphane gerektirmez.
-        if os.name == "nt":
+        if platform_katmani.windows_mu():
             try:
                 fonts = self._win_font_aileleri()
                 if fonts:
@@ -1383,7 +1368,7 @@ class IDECore:
 
         # matplotlib çok ağırdır (onlarca MB, saniyeler); yalnızca Windows
         # dışında ve diğer yollar başarısızsa denenir.
-        if not fonts and os.name != "nt":
+        if not fonts and not platform_katmani.windows_mu():
             try:
                 from matplotlib import font_manager
 
@@ -3211,7 +3196,7 @@ class IDECore:
     @staticmethod
     def kodi_imlec_konumu():
         """Farenin ekrandaki yeri (Kodi pencerenin dışına bırakıldığı an)."""
-        if sys.platform != "win32":
+        if not platform_katmani.windows_mu():
             return {"ok": False}
         import ctypes
         import ctypes.wintypes as wt
@@ -5583,15 +5568,8 @@ class IDECore:
 
     @staticmethod
     def _sureci_oldur(proc):
-        if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            proc.terminate()
+        # Alt süreçleriyle birlikte (Windows: taskkill /F /T, POSIX: süreç grubu).
+        platform_katmani.sureci_agacla_oldur(proc.pid, zaman_asimi=None, sessiz=False)
 
     def _calistirmayi_sonlandir(self):
         """Yeniden çalıştırma / debug başlatma öncesi YALNIZCA çalışan
@@ -5768,13 +5746,7 @@ class IDECore:
     @staticmethod
     def _kabuk_kod_sayfasi():
         """cmd yerleşik komutlarının (dir, ipconfig …) çıktı kod sayfası."""
-        if os.name == "nt":
-            try:
-                import ctypes
-                return f"cp{ctypes.windll.kernel32.GetOEMCP()}"
-            except Exception:
-                return "cp857"
-        return "utf-8"
+        return platform_katmani.kabuk_kod_sayfasi()
 
     _TURKOD_KOMUTU = re.compile(r"(?i)^turkod(?:\.exe)?(?=\s|$)(.*)$", re.DOTALL)
 
@@ -6310,15 +6282,7 @@ class IDECore:
 
         if proc.poll() is None:
             try:
-                if os.name == "nt":
-                    subprocess.run(
-                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                else:
-                    proc.kill()
+                platform_katmani.sureci_agacla_oldur(proc.pid, zaman_asimi=None, sessiz=False)
             except Exception:
                 pass
 

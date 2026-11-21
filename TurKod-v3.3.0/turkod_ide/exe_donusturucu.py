@@ -41,9 +41,10 @@ import tempfile
 import time
 
 try:
-    from . import calistirici
+    from . import calistirici, platform_katmani
 except ImportError:
     import calistirici
+    import platform_katmani
 
 IMZA = "TURKOD-EXE-1"
 IMZA_DOSYASI = "turkod_exe_imzasi.txt"
@@ -470,8 +471,7 @@ def _ortam():
 
 
 def _kullanici_paket_yolu():
-    base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
-    return os.path.join(base, "TurKod", "pip_packages")
+    return os.path.join(platform_katmani.veri_klasoru(), "pip_packages")
 
 
 def _calistir_akit(komut, yaz, cwd=None, satir_isle=None):
@@ -480,7 +480,7 @@ def _calistir_akit(komut, yaz, cwd=None, satir_isle=None):
         komut, cwd=cwd, env=_ortam(), stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         encoding="utf-8", errors="replace",
-        creationflags=calistirici.CREATE_NO_WINDOW)
+        **platform_katmani.gizli_surec_ayarlari())
     son = []
     with surec.stdout:
         for satir in surec.stdout:
@@ -604,7 +604,7 @@ def _hata_ayrintisi_yaz(son, yaz, satir_sayisi=10):
 def pyinstaller_hazirla(python_exe, yaz):
     """PyInstaller yoksa kullanıcı paket klasörüne kurar. Başarılıysa True."""
     denetim = subprocess.run([python_exe, "-c", "import PyInstaller"], env=_ortam(),
-                             capture_output=True, creationflags=calistirici.CREATE_NO_WINDOW)
+                             capture_output=True, **platform_katmani.gizli_surec_ayarlari())
     if denetim.returncode == 0:
         return True
     yaz("EXE yapma aracı (PyInstaller) ilk kez kuruluyor; internet bağlantısı gerekir...")

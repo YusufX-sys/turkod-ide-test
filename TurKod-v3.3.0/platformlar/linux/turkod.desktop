@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=TürKod
+GenericName=Türkçe Programlama Ortamı
+Comment=Türkçe kod yaz, çalıştır ve öğren
+Exec=turkod_flutter %F
+Icon=turkod
+Terminal=false
+Categories=Development;Education;IDE;
+MimeType=text/x-turkod;
+Keywords=python;programlama;kodlama;türkçe;
+StartupWMClass=turkod_flutter

@@ -156,7 +156,7 @@ void main() {
       await _menu(t, 'Yardım', 'Hakkında / İmza');
       await _bulanaKadar(t, find.textContaining('Sürüm '), sn: 15);
       final surumMetni = find.textContaining('Sürüm ').evaluate().map((e) => e.widget).map((w) => w is Text ? w.data ?? '' : w is SelectableText ? w.data ?? '' : w is EditableText ? w.controller.text : '').join(' ');
-      _kontrol('Hakkında penceresinde sürüm', surumMetni.contains('3.3.0'), surumMetni);
+      _kontrol('Hakkında penceresinde sürüm', surumMetni.contains('4.0.0'), surumMetni);
       await t.tap(find.text('Kapat').last);
       await _bekle(t, const Duration(milliseconds: 500));
 

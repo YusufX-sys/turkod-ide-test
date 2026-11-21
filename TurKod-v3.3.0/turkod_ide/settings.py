@@ -8,38 +8,18 @@ import tempfile
 import threading
 import time
 
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
+
 _DPAPI_ONEKI = "dpapi:"
 
 
 def _dpapi(veri, coz):
     """Windows DPAPI: veri yalnızca aynı Windows kullanıcısı tarafından
-    çözülebilir. Windows dışında ya da hata olursa None."""
-    if sys.platform != "win32":
-        return None
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        class _Blob(ctypes.Structure):
-            _fields_ = [("cbData", wintypes.DWORD),
-                        ("pbData", ctypes.POINTER(ctypes.c_char))]
-
-        crypt32 = ctypes.windll.crypt32
-        kernel32 = ctypes.windll.kernel32
-        tampon = ctypes.create_string_buffer(veri, len(veri))
-        giris = _Blob(len(veri), ctypes.cast(tampon, ctypes.POINTER(ctypes.c_char)))
-        cikis = _Blob()
-        islev = crypt32.CryptUnprotectData if coz else crypt32.CryptProtectData
-        # 0x1 = CRYPTPROTECT_UI_FORBIDDEN
-        if not islev(ctypes.byref(giris), None, None, None, None, 0x1,
-                     ctypes.byref(cikis)):
-            return None
-        try:
-            return ctypes.string_at(cikis.pbData, cikis.cbData)
-        finally:
-            kernel32.LocalFree(cikis.pbData)
-    except Exception:
-        return None
+    çözülebilir. Windows dışında ya da hata olursa None (platform katmanı)."""
+    return platform_katmani.gizli_veri(veri, coz)
 
 
 def _sifrele(deger):

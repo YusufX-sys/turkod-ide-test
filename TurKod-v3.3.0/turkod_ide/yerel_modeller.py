@@ -25,6 +25,11 @@ import tempfile
 import threading
 import time
 
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
+
 HF_API = "https://huggingface.co/api/models"
 HF_INDIR = "https://huggingface.co/{depo}/resolve/main/{dosya}"
 WHL_INDEKS = "https://abetlen.github.io/llama-cpp-python/whl/{paket}"
@@ -89,14 +94,11 @@ YEDEK_ONERILER = {
 
 
 def _bayrak():
-    if os.name == "nt":
-        return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
-    return {}
+    return platform_katmani.gizli_surec_ayarlari()
 
 
 def _veri_dizini():
-    taban = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    dizin = os.path.join(taban, "TurKod", "yerel_ai")
+    dizin = os.path.join(platform_katmani.veri_klasoru(yedek=tempfile.gettempdir()), "yerel_ai")
     try:
         os.makedirs(dizin, exist_ok=True)
     except OSError:
@@ -153,7 +155,7 @@ def _python():
 # ----------------------------------------------------------------------
 def _ram_gb():
     """(toplam, boş) GB."""
-    if os.name == "nt":
+    if platform_katmani.windows_mu():
         try:
             import ctypes
 
@@ -196,7 +198,7 @@ def _gpu_kayit_defteri():
     """Windows kayıt defterinden ekran kartları ve 64 bit VRAM boyutu
     (WMI'ın AdapterRAM alanı 4 GB'ta takılır)."""
     kartlar = []
-    if os.name != "nt":
+    if not platform_katmani.windows_mu():
         return kartlar
     try:
         import winreg
@@ -244,7 +246,7 @@ def _gpu_kayit_defteri():
 def _nvidia_bilgisi():
     """(kartlar, CUDA sürümü) — nvidia-smi yoksa ([], None)."""
     yol = shutil.which("nvidia-smi")
-    if not yol and os.name == "nt":
+    if not yol and platform_katmani.windows_mu():
         aday = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32",
                             "nvidia-smi.exe")
         yol = aday if os.path.isfile(aday) else None
@@ -361,7 +363,7 @@ def _disk_turleri():
     if _DISK_TURU is not None:
         return _DISK_TURU
     sonuc = {}
-    if os.name == "nt":
+    if platform_katmani.windows_mu():
         betik = ("Get-Partition | Where-Object DriveLetter | ForEach-Object { "
                  "$n = $_.DiskNumber; $pd = Get-PhysicalDisk | Where-Object DeviceId -eq \"$n\"; "
                  "[pscustomobject]@{H=[string]$_.DriveLetter; T=[string]$pd.MediaType; "
@@ -386,7 +388,7 @@ def _disk_turleri():
 
 
 def _sabit_suruculer():
-    if os.name != "nt":
+    if not platform_katmani.windows_mu():
         return [os.path.expanduser("~")]
     try:
         import ctypes

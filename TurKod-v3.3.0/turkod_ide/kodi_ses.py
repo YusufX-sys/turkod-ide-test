@@ -20,6 +20,11 @@ import threading
 import time
 import wave
 
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
+
 ORNEKLEME = 16000
 PARCA_SN = 0.1  # 100 ms'lik tamponlar
 TRANSKRIPSIYON = {
@@ -111,7 +116,7 @@ def sessizlik_ayir(parcalar, sessizlik_sn=1.2, baslama_sn=8.0, en_uzun_sn=25.0, 
 def _mikrofon_parcalari(dur):
     """Mikrofondan 100 ms'lik parçalar üretir (dur olayı gelene ya da üreteç
     kapatılana dek)."""
-    if sys.platform != "win32":
+    if not platform_katmani.windows_mu():
         raise SesHatasi("Sesli konuşma yalnızca Windows'ta çalışır.")
     winmm = ctypes.windll.winmm
     fmt = _WAVEFORMATEX(1, 1, ORNEKLEME, ORNEKLEME * 2, 2, 16, 0)
@@ -185,11 +190,6 @@ def yaziya_cevir(wav_bayt, saglayici, anahtar, zaman_asimi=40):
 # ---------------------------------------------------------------------------
 # Seslendirme
 # ---------------------------------------------------------------------------
-_PS1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kodi_ses.ps1")
-if not os.path.exists(_PS1) and getattr(sys, "_MEIPASS", None):
-    _PS1 = os.path.join(sys._MEIPASS, "kodi_ses.ps1")
-
-
 def konusma_metni(metin):
     """Markdown cevaptan sesli okunacak metin: kod blokları, bağlantılar ve
     işaretler atılır."""
@@ -203,41 +203,16 @@ def konusma_metni(metin):
 
 
 def seslendir(metin, dur=None):
-    """Metni okur; bitene ya da dur olayı gelene dek bekler."""
-    if sys.platform != "win32":
-        raise SesHatasi("Seslendirme yalnızca Windows'ta çalışır.")
-    import winsound
+    """Metni okur; bitene ya da dur olayı gelene dek bekler. Ses motoru
+    platform katmanındadır (Windows: kodi_ses.ps1, macOS: say, Linux: spd-say /
+    espeak-ng)."""
     metin = konusma_metni(metin)
     if not metin:
         return
-    klasor = tempfile.mkdtemp(prefix="kodi_ses_")
-    girdi = os.path.join(klasor, "metin.txt")
-    cikti = os.path.join(klasor, "ses.wav")
     try:
-        with open(girdi, "w", encoding="utf-8") as f:
-            f.write(metin)
-        sonuc = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-             "-File", _PS1, girdi, cikti],
-            capture_output=True, timeout=60,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        if sonuc.returncode != 0 or not os.path.exists(cikti):
-            raise SesHatasi("Windows'un konuşma sesi kullanılamadı.")
-        if dur is not None and dur.is_set():
-            return
-        with wave.open(cikti) as w:
-            sure = w.getnframes() / float(w.getframerate())
-        winsound.PlaySound(cikti, winsound.SND_FILENAME | winsound.SND_ASYNC)
-        bitis = time.time() + sure + 0.2
-        while time.time() < bitis:
-            if dur is not None and dur.is_set():
-                winsound.PlaySound(None, 0)
-                break
-            time.sleep(0.05)
-    finally:
-        # Geçici klasör her durumda silinir. Eskiden ses dosyası üretilemeyince
-        # os.remove(ses.wav) hata veriyor, klasör hiç silinmiyordu.
-        shutil.rmtree(klasor, ignore_errors=True)
+        platform_katmani.konus(metin, dur)
+    except platform_katmani.PlatformHatasi as e:
+        raise SesHatasi(str(e)) from e
 
 
 _SES_KILIDI = threading.Lock()

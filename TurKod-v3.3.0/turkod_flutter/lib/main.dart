@@ -22,6 +22,7 @@ import 'package:webview_windows/webview_windows.dart'
 import 'acilis_ekrani.dart';
 import 'arayuz_turu.dart';
 import 'markdown_gorunum.dart';
+import 'platform_ayarlari.dart';
 import 'yardim.dart';
 
 part 'eklentiler.dart';
@@ -41,8 +42,9 @@ extension _CodeLineSelectionX on re.CodeLineSelection {
 // SABİTLER
 // ============================================================================
 
-const String kMonoFontFamily = 'Consolas';
-const List<String> kMonoFontFallback = ['Menlo', 'Courier New', 'monospace'];
+/// Kod yazı tipi: Windows'ta Consolas, macOS'ta Menlo, Linux'ta DejaVu Sans Mono.
+final String kMonoFontFamily = kodYaziTipi();
+const List<String> kMonoFontFallback = kodYaziTipiYedekleri;
 
 /// Ayarlar sekmesi özel bir sekmedir; dosya gibi davranmaz.
 const String kSettingsPath = 'internal:settings';
@@ -490,14 +492,14 @@ class AppConfig {
     return 'ws://127.0.0.1:$port/ws?token=${Uri.encodeQueryComponent(_token)}';
   }
 
-  /// Paketlenmiş backend: <uygulama klasörü>\backend\turkod_backend.exe
-  static String get packagedBackendExe => p.join(
-      p.dirname(Platform.resolvedExecutable), 'backend', 'turkod_backend.exe');
+  /// Paketlenmiş backend: Windows'ta <uygulama klasörü>\backend\turkod_backend.exe
+  /// (Linux ve macOS yolları: platform_ayarlari.dart, paketliSunucuYolu).
+  static String get packagedBackendExe =>
+      paketliSunucuYolu(Platform.resolvedExecutable);
 
-  /// EXE modunda mı çalışıyoruz? backend\turkod_backend.exe yanımızdaysa evet.
+  /// Paketli kipte mi çalışıyoruz? Paketli sunucu yanımızdaysa evet.
   /// (`flutter run` sırasında bu dosya olmadığından geliştirme moduna düşer.)
-  static bool get isExeMode =>
-      Platform.isWindows && File(packagedBackendExe).existsSync();
+  static bool get isExeMode => File(packagedBackendExe).existsSync();
 
 
   /// Dev modda repo kökü: turkod_ide\server.py'yi içeren ilk üst klasör.
@@ -529,8 +531,7 @@ class AppConfig {
     if (isExeMode) {
       return [packagedBackendExe, '--backend', '--parent-pid', '$pid'];
     }
-    final python = Platform.isWindows ? 'python' : 'python3';
-    return [python, '-u', '-m', 'turkod_ide.server', '--parent-pid', '$pid'];
+    return [pythonKomutu(), '-u', '-m', 'turkod_ide.server', '--parent-pid', '$pid'];
   }
 
   /// Backend çalışma dizini (dev modda repo kökü gerekli).
@@ -903,11 +904,7 @@ class BackendLauncher {
     final eski = _process;
     _process = null;
     if (eski == null) return;
-    if (Platform.isWindows) {
-      Process.run('taskkill', ['/F', '/T', '/PID', '${eski.pid}']);
-    } else {
-      eski.kill(ProcessSignal.sigterm);
-    }
+    sureciAgaclaKapat(eski);
   }
 
   void dispose() {
@@ -4954,7 +4951,7 @@ Future<void> _runArgsDialog(BuildContext context) async {
               TextField(
                 controller: ctrl,
                 autofocus: true,
-                style: const TextStyle(fontFamily: kMonoFontFamily),
+                style: TextStyle(fontFamily: kMonoFontFamily),
                 decoration: const InputDecoration(
                   hintText: 'ör. veri.txt --ayrintili "iki kelime"',
                   border: OutlineInputBorder(),
@@ -5059,7 +5056,7 @@ class _KosulluBreakpointDialogState extends State<_KosulluBreakpointDialog> {
             TextField(
               controller: ctrl,
               autofocus: true,
-              style: const TextStyle(fontFamily: kMonoFontFamily),
+              style: TextStyle(fontFamily: kMonoFontFamily),
               decoration: const InputDecoration(
                 hintText: 'ör. i == 5   ya da   uzunluk(liste) > 3',
                 border: OutlineInputBorder(),
@@ -5829,7 +5826,7 @@ class OzelKisayollar {
         if (a.control) 'Ctrl',
         if (a.shift) 'Shift',
         if (a.alt) 'Alt',
-        if (a.meta) 'Win',
+        if (a.meta) metaTusAdi(),
         tusAdi(a.trigger),
       ].join('+');
 
@@ -5853,7 +5850,7 @@ class OzelKisayollar {
         control: m.contains('ctrl'),
         shift: m.contains('shift'),
         alt: m.contains('alt'),
-        meta: m.contains('win'));
+        meta: m.contains('win') || m.contains('cmd'));
   }
 
   static List<AppAction> uygula(List<AppAction> eylemler) {
@@ -5881,6 +5878,25 @@ class OzelKisayollar {
 
 List<AppAction> buildAppActions() =>
     OzelKisayollar.uygula(_varsayilanEylemler());
+
+/// Varsayılan eylemler; macOS'ta Ctrl'li kısayollar Cmd'ye çevrilir.
+List<AppAction> _varsayilanEylemler() {
+  final eylemler = _tanimliEylemler();
+  if (suankiIsletim != Isletim.macos) return eylemler;
+  return [
+    for (final a in eylemler)
+      AppAction(
+        id: a.id,
+        label: a.label,
+        menu: a.menu,
+        icon: a.icon,
+        run: a.run,
+        activator: a.activator == null ? null : platformKisayolu(a.activator!),
+        shortcut: platformKisayolMetni(a.shortcut),
+        eklenti: a.eklenti,
+      ),
+  ];
+}
 
 Map<String, String>? _guncelKisayollar;
 int _guncelKisayolSurumu = -1;
@@ -6099,7 +6115,7 @@ class _TusYakalaDialogState extends State<_TusYakalaDialog> {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(_yakalanan ?? 'Tuş birleşimine basın… (Esc: vazgeç)',
-              style: const TextStyle(fontFamily: kMonoFontFamily, fontSize: 16)),
+              style: TextStyle(fontFamily: kMonoFontFamily, fontSize: 16)),
         ),
       ),
       actions: [
@@ -6118,7 +6134,7 @@ class _TusYakalaDialogState extends State<_TusYakalaDialog> {
   }
 }
 
-List<AppAction> _varsayilanEylemler() {
+List<AppAction> _tanimliEylemler() {
   return [
     AppAction(
       id: 'file.new_tab',
@@ -8331,7 +8347,7 @@ class ConnectionBanner extends StatelessWidget {
         ? 'TürKod motoru yeniden başlatılıyor...'
         : durdu
             ? '${conn.sonHata ?? 'TürKod motoru çalışmıyor.'} '
-                r'Ayrıntı: %LOCALAPPDATA%\TurKod\backend.log'
+                'Ayrıntı: ${sunucuGunluguAciklamasi()}'
             : 'TürKod motoruyla bağlantı yok; yeniden bağlanılıyor...';
     const yazi = TextStyle(color: Colors.white, fontSize: 13);
     return Container(
@@ -9992,7 +10008,7 @@ class Minimap extends StatelessWidget {
                 scrollOffset: off,
                 maxScrollExtent: extent,
                 viewportHeight: h,
-                textStyle: const TextStyle(
+                textStyle: TextStyle(
                   fontFamily: kMonoFontFamily,
                   fontFamilyFallback: kMonoFontFallback,
                   fontSize: 7,
@@ -13380,8 +13396,8 @@ class _CodeEditorState extends State<CodeEditor> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(_ipucuBaslik ?? '',
-                      style: const TextStyle(
-                          fontFamily: 'Consolas',
+                      style: TextStyle(
+                          fontFamily: kMonoFontFamily,
                           fontWeight: FontWeight.bold,
                           fontSize: 12)),
                   if ((_ipucuAciklama ?? '').isNotEmpty) ...[
@@ -14103,7 +14119,7 @@ class _DebugPanelState extends State<DebugPanel> {
                 Expanded(
                   child: TextField(
                     controller: _expr,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: kMonoFontFamily, fontSize: 12),
                     decoration: const InputDecoration(
                       isDense: true,
@@ -14759,7 +14775,7 @@ class AiChatBubble extends StatelessWidget {
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Text(part.content,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: kMonoFontFamily,
                               fontFamilyFallback: kMonoFontFallback,
                               fontSize: 12,
@@ -15506,8 +15522,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _satirNo = s.getBool('satir_numaralari', fallback: true);
     _kelimeSar = s.getBool('kelime_sar');
     _boslukGoster = s.getBool('bosluk_gostergesi');
-    _yaziTipi = s.getString('yazi_tipi', fallback: 'Consolas').trim();
-    if (_yaziTipi.isEmpty) _yaziTipi = 'Consolas';
+    _yaziTipi = s.getString('yazi_tipi', fallback: kMonoFontFamily).trim();
+    if (_yaziTipi.isEmpty) _yaziTipi = kMonoFontFamily;
     _fontSearch.text = _yaziTipi;
     _terminalFontSize = s
         .getDouble('terminal_yazi_boyutu', fallback: 13)
@@ -15636,7 +15652,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'satir_numaralari': _satirNo,
         'kelime_sar': _kelimeSar,
         'bosluk_gostergesi': _boslukGoster,
-        'yazi_tipi': _yaziTipi.trim().isEmpty ? 'Consolas' : _yaziTipi.trim(),
+        'yazi_tipi': _yaziTipi.trim().isEmpty ? kMonoFontFamily : _yaziTipi.trim(),
         if (_terminalFontSize != _terminalFontSizeIlk)
           'terminal_yazi_boyutu': _terminalFontSize.round(),
         'duzeltme_zaman_asimi': zamanAsimi,
@@ -16469,7 +16485,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         },
                                         onSubmitted: (v) => setState(() {
                                           _yaziTipi = v.trim().isEmpty
-                                              ? 'Consolas'
+                                              ? kMonoFontFamily
                                               : v.trim();
                                           _fontSearch.text = _yaziTipi;
                                           _fontListOpen = false;
@@ -17282,7 +17298,7 @@ class _MetinGirisDialogState extends State<MetinGirisDialog> {
         controller: _girdi,
         autofocus: true,
         style: widget.esGenislik
-            ? const TextStyle(fontFamily: kMonoFontFamily)
+            ? TextStyle(fontFamily: kMonoFontFamily)
             : null,
         decoration: InputDecoration(
             labelText: widget.etiket, helperText: widget.ipucu),
@@ -17484,7 +17500,7 @@ class _YanEditorState extends State<YanEditor> {
         .toList();
     final secili = _sekme;
     final boyut = settings.getDouble('yazi_boyutu', fallback: 14);
-    final font = settings.getString('yazi_tipi', fallback: 'Consolas');
+    final font = settings.getString('yazi_tipi', fallback: kMonoFontFamily);
     return Container(
       color: theme.colorScheme.surface,
       child: Column(children: [
@@ -17811,7 +17827,7 @@ class _DosyalardaAraDialogState extends State<DosyalardaAraDialog> {
                     title: Text(s['metin']?.toString() ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: 'Consolas')),
+                        style: TextStyle(fontFamily: kMonoFontFamily)),
                     subtitle: Text('$gosterilen : $satir',
                         style: const TextStyle(fontSize: 11)),
                     // Pencere kapandıktan sonra açan bağlam dosyaya gider.
@@ -17998,7 +18014,7 @@ class _CodeSearchDialogState extends State<CodeSearchDialog> {
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : SingleChildScrollView(
                       child: SelectableText(result ?? 'Sonuç burada görünecek.',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: kMonoFontFamily,
                               fontFamilyFallback: kMonoFontFallback,
                               fontSize: 12.5,
@@ -18075,7 +18091,7 @@ class _AboutSignDialogState extends State<AboutSignDialog> {
               Text('Detay: ${imza['detay']}'),
               const SizedBox(height: 8),
               SelectableText('SHA-256: ${hash['hash']}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: kMonoFontFamily,
                       fontFamilyFallback: kMonoFontFallback,
                       fontSize: 11)),

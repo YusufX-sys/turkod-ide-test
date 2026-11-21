@@ -24,6 +24,18 @@ void main() {
     expect(belgeYolu('olmayan.pdf', baslangic: derin.path), isNull);
   });
 
+  test('macOS: belgeler uygulama paketinin Resources klasöründe bulunur', () {
+    final kok = Directory.systemTemp.createTempSync('turkod_belge_mac_');
+    addTearDown(() => kok.deleteSync(recursive: true));
+    final icerik = p.join(kok.path, 'TurKod.app', 'Contents');
+    final belgeler = Directory(p.join(icerik, 'Resources', 'belgeler'))
+      ..createSync(recursive: true);
+    File(p.join(belgeler.path, kKitapDosyasi)).writeAsStringSync('%PDF');
+    final macos = Directory(p.join(icerik, 'MacOS'))..createSync();
+    expect(belgeYolu(kKitapDosyasi, baslangic: macos.path),
+        p.join(belgeler.path, kKitapDosyasi));
+  });
+
   test('projedeki belgeler gerçekten var', () {
     final proje = p.dirname(Directory.current.path);
     for (final ad in [kKitapDosyasi, 'LISANS.txt', 'SORUMLULUK_REDDI.txt',

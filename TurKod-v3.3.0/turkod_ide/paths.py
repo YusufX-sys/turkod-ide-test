@@ -4,6 +4,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
+
 
 def kaynak_kok() -> str:
     """Kaynak dosyalarin kok dizinini bulur."""
@@ -26,16 +31,13 @@ def kaynak_yolu(dosya_adi: str = "") -> str:
 def calisma_yolu(dosya_adi: str = "") -> str:
     """Yazilabilir calisma zamani dosyalari icin yol uretir."""
     if getattr(sys, "frozen", False):
-        base = os.path.join(
-            os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-            "TurKod",
-        )
+        base = platform_katmani.veri_klasoru()
     else:
         # Geliştirme ortamında kaynak kodu proje köküne yazmak yerine,
         # kullanıcıya ait tek bir yazılabilir klasör kullanmak daha güvenlidir.
         base = os.path.join(os.path.expanduser("~"), ".turkod")
 
-    # Klasör oluşturulamazsa (aynı adlı bir dosya var, izin yok, LOCALAPPDATA
+    # Klasör oluşturulamazsa (aynı adlı bir dosya var, izin yok, veri klasörü
     # bozuk) eskiden dictionary.py içe aktarılırken backend çöküyor, program
     # hiç açılmıyordu. Geçici klasöre düşülür; o da olmazsa kullanılabilir
     # olmasa da bir yol döndürülür (yazma noktaları zaten hataları yakalıyor).

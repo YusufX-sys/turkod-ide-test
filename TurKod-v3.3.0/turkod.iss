@@ -1,7 +1,7 @@
 ; TürKod kurulum betiği. build_release.ps1 tarafından çağrılır.
 ; AppId sabit kalmalı: sürümler arası yükseltme bunu kullanır.
 #ifndef Surum
-  #define Surum "3.3.0"
+  #define Surum "4.0.0"
 #endif
 
 [Setup]

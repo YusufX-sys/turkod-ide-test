@@ -17,6 +17,11 @@ import json
 import os
 import re
 import tempfile
+
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
 import threading
 import time
 
@@ -158,8 +163,7 @@ _TAZELENIYOR = False
 
 
 def _veri_dizini():
-    taban = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    dizin = os.path.join(taban, "TurKod")
+    dizin = platform_katmani.veri_klasoru(yedek=tempfile.gettempdir())
     try:
         os.makedirs(dizin, exist_ok=True)
     except OSError:

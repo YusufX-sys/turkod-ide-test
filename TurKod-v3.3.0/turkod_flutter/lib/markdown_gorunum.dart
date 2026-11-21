@@ -9,7 +9,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const String _kMono = 'Consolas';
+import 'platform_ayarlari.dart';
+
+final String _kMono = kodYaziTipi();
 const List<String> _kMonoYedek = ['Menlo', 'Courier New', 'monospace'];
 
 /// Markdown metnini blok listesine ayırır (test edilebilir, saf Dart).

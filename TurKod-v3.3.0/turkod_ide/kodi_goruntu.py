@@ -13,6 +13,11 @@ import ctypes
 import io
 import sys
 
+try:
+    from . import platform_katmani
+except ImportError:
+    import platform_katmani
+
 KIPLER = ("kapali", "pencere", "ekran")
 EN_UZUN_KENAR = 1600
 _PENCERE_OZELLIGI = "TurKod.Editor"  # flutter_window.h: kTurKodPencereOzelligi
@@ -20,7 +25,7 @@ _PENCERE_OZELLIGI = "TurKod.Editor"  # flutter_window.h: kTurKodPencereOzelligi
 
 def _turkod_penceresi():
     """TürKod ana penceresinin fiziksel piksel dikdörtgeni ya da None."""
-    if sys.platform != "win32":
+    if not platform_katmani.windows_mu():
         return None
     import ctypes.wintypes as w
     u = ctypes.windll.user32

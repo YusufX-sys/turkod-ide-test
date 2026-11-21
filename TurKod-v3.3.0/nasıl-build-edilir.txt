@@ -15,7 +15,7 @@ betikler yolları kendi konumlarına göre bulur:
 
     powershell -ExecutionPolicy Bypass -File .\hazirla_ve_derle.ps1
 
-Çıktı: dist\TurKod-Setup-3.3.0.exe (sürüm surum.txt'den okunur).
+Çıktı: dist\TurKod-Setup-4.0.0.exe (sürüm surum.txt'den okunur).
 
 
 ---------------------------------------------------------------------
@@ -128,7 +128,7 @@ betikler yolları kendi konumlarına göre bulur:
 
          powershell -ExecutionPolicy Bypass -File .\hazirla_ve_derle.ps1 `
              -Imzali -SignToolArgs @('/sha1','SERTIFIKA_PARMAK_IZI') `
-             -IndirmeUrl 'https://github.com/YusufX-sys/turkod-ide/releases/download/v3.3.0/TurKod-Setup-3.3.0.exe'
+             -IndirmeUrl 'https://github.com/YusufX-sys/turkod-ide/releases/download/v4.0.0/TurKod-Setup-4.0.0.exe'
 
       - SERTIFIKA_PARMAK_IZI: sertifikanın SHA-1 parmak izi
         (certmgr.msc > Kişisel > Sertifikalar > sertifika > Ayrıntılar).
@@ -191,7 +191,7 @@ betikler yolları kendi konumlarına göre bulur:
 
   Manifest imzalamayı elle çalıştırmak (Authenticode imzasından SONRA):
 
-         python manifest_imzala.py --dizin dist\TurKod\backend --surum 3.3.0 `
+         python manifest_imzala.py --dizin dist\TurKod\backend --surum 4.0.0 `
              --ozel-anahtar C:\gizli\turkod_private.pem --haric "_internal/python_embed/*"
 
          --tam   önbelleği yok sayıp her şeyi yeniden hash'ler
@@ -199,7 +199,7 @@ betikler yolları kendi konumlarına göre bulur:
 
   Kurulum dosyasının Authenticode imzası (imzalı derlemede):
 
-         signtool verify /pa /all dist\TurKod-Setup-3.3.0.exe
+         signtool verify /pa /all dist\TurKod-Setup-4.0.0.exe
 
   Önerilen son kontrol: Setup dosyasını temiz bir Windows sanal
   makinesinde kur; editörü, kod çalıştırmayı, kaplumbağa ve pygame

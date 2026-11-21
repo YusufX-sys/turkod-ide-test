@@ -20,12 +20,13 @@ import traceback
 import types
 
 try:
-    from . import calistirici, logo_ascii
+    from . import calistirici, logo_ascii, platform_katmani
     from .converter import python_kodu_turkceye_cevir, turkce_kodu_donustur
     from .runner import RUNNER_ORTAK, hata_aciklamasi, hata_turu_adi, oneri_tablolarini_yerlestir
 except ImportError:
     import calistirici
     import logo_ascii
+    import platform_katmani
     from converter import python_kodu_turkceye_cevir, turkce_kodu_donustur
     from runner import RUNNER_ORTAK, hata_aciklamasi, hata_turu_adi, oneri_tablolarini_yerlestir
 
@@ -542,7 +543,7 @@ class TurKodKabugu:
 
     def _k_temizle(self, _arg):
         if getattr(self.cikis, "isatty", lambda: False)():
-            os.system("cls" if os.name == "nt" else "clear")
+            platform_katmani.ekrani_temizle()
         else:
             self.yaz("\n" * 3)
 
@@ -556,7 +557,7 @@ class TurKodKabugu:
         Gerçek konsolda ekran temizlenir ve logo kendi renkleriyle çizilir."""
         konsol = getattr(self.cikis, "isatty", lambda: False)()
         if konsol:
-            os.system("cls" if os.name == "nt" else "clear")
+            platform_katmani.ekrani_temizle()
         renkli = _R.ACIK and konsol and "renksiz" not in (arg or "").lower()
         for satir in logo_ascii.ciz(renkli=renkli):
             self.yaz(satir)

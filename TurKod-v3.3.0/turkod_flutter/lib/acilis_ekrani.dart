@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'platform_ayarlari.dart';
+
 /// Arayüz dili: hazır Malzeme metinleri (sağ tık menüsü, Geri, Kapat,
 /// Lisanslar sayfası) Türkçe görünür.
 const Locale kTurkce = Locale('tr', 'TR');
@@ -74,8 +76,8 @@ class AcilisEkrani extends StatelessWidget {
                         style: const TextStyle(color: Colors.white70),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        r'Ayrıntı: %LOCALAPPDATA%\TurKod\backend.log',
+                      Text(
+                        'Ayrıntı: ${sunucuGunluguAciklamasi()}',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white38, fontSize: 12),
                       ),

@@ -1399,13 +1399,13 @@ class KodiRessami extends CustomPainter {
 
   /// Göğüsteki "</>" yazısı bir kez ölçülür (her karede değil).
   static final TextPainter _kodYazisi = TextPainter(
-    text: const TextSpan(
+    text: TextSpan(
         text: '</>',
         style: TextStyle(
             color: _kKodiCamgobegi,
             fontSize: 11,
             fontWeight: FontWeight.w800,
-            fontFamily: 'Consolas')),
+            fontFamily: kMonoFontFamily)),
     textDirection: TextDirection.ltr,
   )..layout();
 

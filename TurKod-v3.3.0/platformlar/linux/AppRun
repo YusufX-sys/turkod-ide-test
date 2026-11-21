@@ -1,0 +1,24 @@
+#!/bin/sh
+# TürKod AppImage giriş noktası.
+#
+# AppImage tek bir dosyadır; içindeki programlar bu betik üzerinden seçilir:
+#   TurKod.AppImage [dosya.trpy ...]          -> editör (Flutter)
+#   TurKod.AppImage --terminal dosya.trpy     -> .trpy'yi TürKod terminal penceresinde çalıştırır
+#   TurKod.AppImage --turkod <argümanlar>     -> `turkod` komutu (konsol kipi)
+# ~/.local/bin/turkod sarmalayıcısı ve .trpy ilişkisi (turkod_ide/platform_katmani/
+# linux.py) AppImage dosyasını bu argümanlarla çağırır.
+BURASI="$(dirname "$(readlink -f "$0")")"
+UYGULAMA="$BURASI/usr/lib/turkod"
+
+case "$1" in
+    --turkod)
+        shift
+        exec "$UYGULAMA/backend/turkod" "$@"
+        ;;
+    --terminal)
+        exec "$UYGULAMA/backend/turkod_backend" "$@"
+        ;;
+    *)
+        exec "$UYGULAMA/turkod_flutter" "$@"
+        ;;
+esac

@@ -14,12 +14,18 @@ const String kKitapAdi = 'TürKod ile Kodlama Macerası';
 
 /// Kurulumda belgeler, programın yanındaki "belgeler" klasöründedir
 /// (build_release.ps1 kopyalar). Geliştirme sırasında exe derleme
-/// klasöründe çalıştığından üst klasörlerde de aranır.
+/// klasöründe çalıştığından üst klasörlerde de aranır. macOS'ta belgeler
+/// uygulama paketinin içinde, TurKod.app/Contents/Resources/belgeler altındadır
+/// (program Contents/MacOS içinde çalışır).
 String? belgeYolu(String ad, {String? baslangic}) {
   var dizin = baslangic ?? p.dirname(Platform.resolvedExecutable);
   for (var i = 0; i < 9; i++) {
-    final aday = p.join(dizin, 'belgeler', ad);
-    if (File(aday).existsSync()) return aday;
+    for (final aday in [
+      p.join(dizin, 'belgeler', ad),
+      p.join(dizin, 'Resources', 'belgeler', ad),
+    ]) {
+      if (File(aday).existsSync()) return aday;
+    }
     final ust = p.dirname(dizin);
     if (ust == dizin) break;
     dizin = ust;
