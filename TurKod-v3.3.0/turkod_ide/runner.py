@@ -549,21 +549,33 @@ def _print(*args, **kwargs):
     _gercek_print(*yeni, **kwargs)
 builtins.print = _print
 
+_TK_YEREL_MODUL_ONBELLEK = {}
+
+
+def _tk_gercek_klasor(yol):
+    # Sembolik bağlantılar çözülür: macOS'ta geçici klasör /var/... ama Python
+    # içe aktarılan modülü /private/var/... yolundan görür; eskiden klasörler
+    # "farklı" sayılıyor, hata ayıklayıcı modülün içine girmiyordu.
+    return os.path.normcase(os.path.realpath(os.path.dirname(os.path.abspath(yol))))
+
+
 def _yerel_modul_adi(yol, dosya_adi):
     """yol, programın içe aktardığı (geçici klasöre çevrilmiş) bir .trpy
     modülüyse "ad.trpy" döndürür."""
+    anahtar = (yol, dosya_adi)
+    if anahtar in _TK_YEREL_MODUL_ONBELLEK:      # hata ayıklayıcı her satırda sorar
+        return _TK_YEREL_MODUL_ONBELLEK[anahtar]
+    sonuc = None
     try:
-        if not yol or not os.path.isabs(dosya_adi):
-            return None
-        klasor = os.path.normcase(os.path.dirname(os.path.abspath(yol)))
-        if klasor != os.path.normcase(os.path.dirname(dosya_adi)):
-            return None
-        ad = os.path.basename(yol)
-        if not ad.endswith(".py") or "runner" in ad or ad == os.path.basename(dosya_adi):
-            return None
-        return ad[:-3] + ".trpy"
+        if yol and os.path.isabs(dosya_adi):
+            ad = os.path.basename(yol)
+            if (ad.endswith(".py") and "runner" not in ad and ad != os.path.basename(dosya_adi)
+                    and _tk_gercek_klasor(yol) == _tk_gercek_klasor(dosya_adi)):
+                sonuc = ad[:-3] + ".trpy"
     except Exception:
-        return None
+        sonuc = None
+    _TK_YEREL_MODUL_ONBELLEK[anahtar] = sonuc
+    return sonuc
 
 
 # runner_kodu_uret() TürKod sözlüğündeki kelimeleri buraya yazar.

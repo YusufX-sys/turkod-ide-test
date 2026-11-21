@@ -560,6 +560,42 @@ class PaketlemeBetikleriTestleri(unittest.TestCase):
         self.assertIn("'Resources', 'backend', 'turkod_backend'", dart)
 
 
+class SembolikKlasorTestleri(unittest.TestCase):
+    """macOS'ta geçici klasör /var/... ama Python içe aktarılan modülü
+    /private/var/... yolundan görür (sembolik bağlantı). Hata ayıklayıcı ve hata
+    mesajları kullanıcının .trpy modülünü yine tanımalı (runner._yerel_modul_adi)."""
+
+    def _islevler(self):
+        from turkod_ide import runner
+        kod = runner.RUNNER_ORTAK
+        bas = kod.index("_TK_YEREL_MODUL_ONBELLEK = {}")
+        son = kod.index("\n\n\n", kod.index("def _yerel_modul_adi"))
+        ns = {"os": os}
+        exec(kod[bas:son], ns)
+        return ns["_yerel_modul_adi"]
+
+    def test_ayni_klasorun_iki_yolu(self):
+        kok = tempfile.mkdtemp(prefix="turkod_pk_")
+        self.addCleanup(shutil.rmtree, kok, True)
+        gercek = os.path.join(kok, "private", "var", "tmp")
+        takma = os.path.join(kok, "var", "tmp")
+        gercek_realpath = os.path.realpath
+
+        def sahte_realpath(p, *a, **k):
+            p = gercek_realpath(p, *a, **k)
+            return p.replace(takma, gercek) if p.startswith(takma) else p
+
+        yerel_modul_adi = self._islevler()
+        ana = os.path.join(takma, "turkce_kod_calisma.py")       # ana dosya: takma yol
+        modul = os.path.join(gercek, "yardimci.py")              # modül: gerçek yol
+        self.assertIsNone(yerel_modul_adi(modul, ana))           # çözülmeden: tanınmaz
+        yerel_modul_adi = self._islevler()                        # temiz önbellek
+        with mock.patch.object(os.path, "realpath", side_effect=sahte_realpath):
+            self.assertEqual(yerel_modul_adi(modul, ana), "yardimci.trpy")
+            self.assertIsNone(yerel_modul_adi(ana, ana))          # ana dosyanın kendisi değil
+            self.assertIsNone(yerel_modul_adi(os.path.join(kok, "baska", "x.py"), ana))
+
+
 class MacosEntegrasyonTestleri(unittest.TestCase):
     def test_iliski_paketten_gelir(self):
         with sistem("darwin"), mock.patch.object(sys, "frozen", True, create=True), \
