@@ -19,6 +19,8 @@ import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart' as re;
 import 'package:turkod_ide/main.dart' as app;
 
+import 'ortak_platform.dart';
+
 final _sonuclar = <(String, bool)>[];
 
 void _yaz(String madde, bool gecti, [String ayrinti = '']) {
@@ -56,13 +58,14 @@ Future<void> _ekran(String ad) async {
 
 Future<void> _tuslar(WidgetTester t, LogicalKeyboardKey tus,
     {bool ctrl = false, bool shift = false, bool alt = false}) async {
-  if (ctrl) await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  // ctrl: macOS'ta Cmd (ortak_platform.dart).
+  if (ctrl) await t.sendKeyDownEvent(kisayolTusu);
   if (shift) await t.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
   if (alt) await t.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
   await t.sendKeyEvent(tus);
   if (alt) await t.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
   if (shift) await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-  if (ctrl) await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  if (ctrl) await t.sendKeyUpEvent(kisayolTusu);
   await _bekle(t, const Duration(milliseconds: 700));
 }
 

@@ -5449,9 +5449,9 @@ class IDECore:
         """TürKod Kabuğu'nu IDE terminalinde başlatır. Kabuk, çalışan program
         gibi davranır: terminale yazılanlar girdisine gider, Durdur kapatır."""
         if getattr(sys, "frozen", False):
-            exe = os.path.join(os.path.dirname(sys.executable), "turkod.exe")
+            exe = platform_katmani.turkod_komutu_dosyasi()
             if not os.path.exists(exe):
-                return {"ok": False, "hata": "turkod.exe bulunamadı."}
+                return {"ok": False, "hata": f"{os.path.basename(exe)} bulunamadı."}
             komut = [exe, "kabuk"]
         else:
             kok = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -5764,7 +5764,9 @@ class IDECore:
                           "'TürKod Kabuğu' düğmesini kullanın ya da "
                           "'turkod --kabuk-pencere' ile ayrı pencerede açın.\n")
         if getattr(sys, "frozen", False):
-            exe = os.path.join(os.path.dirname(sys.executable), "turkod.exe")
+            # Linux/macOS'ta eskiden de turkod.exe aranıyordu: bulunamayınca komut
+            # kabuğa kalıyor, "turkod: not found" hatası veriyordu.
+            exe = platform_katmani.turkod_komutu_dosyasi()
             if not os.path.exists(exe):
                 return komut, None
             on = f'"{exe}"'

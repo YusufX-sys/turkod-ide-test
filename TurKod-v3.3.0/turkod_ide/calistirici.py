@@ -601,8 +601,7 @@ def dosya_turkoda(yol, yaz=_yazdir):
 def kabuk_penceresi_ac():
     """TürKod Kabuğu'nu yeni bir konsol penceresinde başlatır."""
     if _paketli_mi():
-        ad = "turkod.exe" if platform_katmani.windows_mu() else "turkod"
-        exe = os.path.join(os.path.dirname(sys.executable), ad)
+        exe = platform_katmani.turkod_komutu_dosyasi()
         komut = [exe if os.path.exists(exe) else sys.executable, "kabuk"]
         cwd = os.path.expanduser("~")
     else:

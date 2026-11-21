@@ -152,6 +152,14 @@ def dosya_iliskisi_kaldir():
 # --------------------------------------------------------------------------
 # Kullanıcı programlarını çalıştıran Python
 # --------------------------------------------------------------------------
+def turkod_komutu_dosyasi():
+    """Paketli uygulamada `turkod` komutunun (konsollu giriş) dosyası:
+    Windows'ta <backend>\\turkod.exe, Linux/macOS'ta <backend>/turkod."""
+    import os
+    from ._ortak import backend_dizini
+    return os.path.join(backend_dizini(), "turkod.exe" if windows_mu() else "turkod")
+
+
 def editor_dosyasi():
     """Paketli uygulamada TürKod editörünün (Flutter) çalıştırılabilir dosyası."""
     from ._ortak import backend_dizini

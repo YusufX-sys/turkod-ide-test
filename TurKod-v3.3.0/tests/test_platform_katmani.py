@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import threading
 import unittest
 from unittest import mock
@@ -518,6 +519,41 @@ class EditorYoluTestleri(unittest.TestCase):
         with sistem("linux"), mock.patch.object(sys, "frozen", True, create=True), \
                 mock.patch.object(sys, "executable", os.path.join(kok, "backend", "turkod_backend")):
             self.assertEqual(calistirici.editor_exe_bul(), editor)
+
+
+class TurkodKomutuTestleri(unittest.TestCase):
+    """IDE terminalindeki `turkod ...` ve TürKod Kabuğu düğmesi kurulumdaki
+    turkod komutunu bulmalı (Linux/macOS'ta adı .exe'siz; Codespaces'te
+    "turkod: not found" hatası böyle bulundu)."""
+
+    def setUp(self):
+        self.kok = tempfile.mkdtemp(prefix="turkod_pk_")
+        self.addCleanup(shutil.rmtree, self.kok, True)
+
+    def _paketli(self, ad, dosya):
+        open(os.path.join(self.kok, dosya), "w").close()
+        st = contextlib.ExitStack()
+        st.enter_context(sistem(ad))
+        st.enter_context(mock.patch.object(sys, "frozen", True, create=True))
+        st.enter_context(mock.patch.object(sys, "executable",
+                                           os.path.join(self.kok, "turkod_backend")))
+        return st
+
+    def test_dosya_adi(self):
+        with self._paketli("linux", "turkod"):
+            self.assertEqual(pk.turkod_komutu_dosyasi(), os.path.join(self.kok, "turkod"))
+        with self._paketli("darwin", "turkod"):
+            self.assertEqual(pk.turkod_komutu_dosyasi(), os.path.join(self.kok, "turkod"))
+        with self._paketli("win32", "turkod.exe"):
+            self.assertEqual(pk.turkod_komutu_dosyasi(), os.path.join(self.kok, "turkod.exe"))
+
+    def test_ide_terminali_linuxta_yonlendirir(self):
+        from turkod_ide.ide_core import IDECore
+        sahte = types.SimpleNamespace(_TURKOD_KOMUTU=IDECore._TURKOD_KOMUTU)
+        with self._paketli("linux", "turkod"):
+            komut, ileti = IDECore._turkod_komutu(sahte, "turkod --surum")
+        self.assertIsNone(ileti)
+        self.assertEqual(komut, f'"{os.path.join(self.kok, "turkod")}" --surum')
 
 
 class PaketlemeBetikleriTestleri(unittest.TestCase):

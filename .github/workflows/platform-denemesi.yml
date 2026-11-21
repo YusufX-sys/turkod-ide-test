@@ -8,6 +8,9 @@
 #   linux   : AppImage derlenir, duman testi + ekran görüntüsü
 #   macos   : TurKod.app + .dmg derlenir (yerel/ad-hoc imza), duman testi + ekran görüntüsü
 #   hepsi   : üçü birden
+#   arayuz-linux : arayüz (entegrasyon) testleri Linux'ta: uygulama açılır, menülere
+#                  tıklanır, kod yazılır, kısayollara basılır (platformlar/arayuz_testleri.sh)
+#   arayuz-macos : aynı testler macOS'ta (pahalı: önce arayuz-linux ile dene)
 #
 # Özel anahtar BURAYA KONMAZ: paketler --imzasiz derlenir, yalnızca denemek içindir.
 # Sonuçlar (paketler, ekran görüntüleri, günlükler) çalıştırmanın sayfasında
@@ -20,7 +23,7 @@ on:
       hedef:
         description: "Ne çalışsın?"
         type: choice
-        options: [testler, linux, macos, hepsi]
+        options: [testler, linux, macos, hepsi, arayuz-linux, arayuz-macos]
         default: testler
 
 # Proje bu klasörde. Klasörün adı değişirse buradaki ve aşağıdaki
@@ -159,4 +162,38 @@ jobs:
         with:
           name: macos-dmg
           path: TurKod-v3.3.0/dist/*.dmg
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # Arayüz (entegrasyon) testleri: turkod_flutter/integration_test/*_test.dart
+  # Uygulama geliştirici kipinde (python3 -m turkod_ide.server) açılır.
+  arayuz:
+    if: inputs.hedef == 'arayuz-linux' || inputs.hedef == 'arayuz-macos'
+    runs-on: ${{ inputs.hedef == 'arayuz-macos' && 'macos-latest' || 'ubuntu-22.04' }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sistem paketleri (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
+            xvfb imagemagick
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_SURUMU }}
+          cache: true
+      - name: Python paketleri
+        run: python -m pip install -r ../requirements.txt
+      - name: Arayüz testleri
+        run: bash platformlar/arayuz_testleri.sh ../sonuc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arayuz-sonuc-${{ runner.os }}
+          path: sonuc/
           retention-days: 3

@@ -114,7 +114,21 @@ dökümü gelmez, ama işin özü bu notta.
 - **Linux'u tarayıcıda arayüzüyle denemek:** depo kökünde `.devcontainer/` (GitHub
   Codespaces + masaüstü). Actions'ın son `linux` paketini indirip açar
   (`bash .devcontainer/turkod_ac.sh`; `kabuk` ile TürKod Kabuğu). Kullanım:
-  `.devcontainer/BENIOKU.md`. Henüz denenmedi.
+  `.devcontainer/BENIOKU.md`. Denendi (2026-11-21): masaüstü açıldı, TürKod çalıştı,
+  dosya açma ve Çalıştır çalıştı. Bulunan hata: IDE terminalindeki `turkod` komutu ve
+  TürKod Kabuğu düğmesi Linux/macOS'ta `turkod.exe` arıyordu (düzeltildi:
+  `platform_katmani.turkod_komutu_dosyasi`; yeni derlemede denenecek). Kullanıcı da
+  elle denedi: TürKod Kabuğu, Kodi (API'siz), kaplumbağa ve Güncelleştirmeler sorunsuz.
+- **Arayüz (entegrasyon) testleri Linux/macOS'ta:** `turkod_flutter/integration_test/`
+  testleri kısayolda macOS'ta Cmd basar (`ortak_platform.dart`). Çalıştırıcı:
+  `platformlar/arayuz_testleri.sh` (Linux'ta Xvfb; profil klasörleri, OZET.txt, 20 sn'de
+  bir ekran görüntüsü). İş akışı hedefleri: `arayuz-linux`, `arayuz-macos`. Henüz
+  çalıştırılmadı. Yeni senaryo eklemek: integration_test/ altına `*_test.dart`, sonra
+  betikteki listeye bir `calistir` satırı.
+- **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
+  kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
+  `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
+  sistemin derleme/paketleme dosyaları içindir.
 
 ## 2. Genel durum
 

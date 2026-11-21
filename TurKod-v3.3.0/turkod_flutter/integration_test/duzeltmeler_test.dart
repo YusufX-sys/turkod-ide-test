@@ -17,6 +17,8 @@ import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart' as re;
 import 'package:turkod_ide/main.dart' as app;
 
+import 'ortak_platform.dart';
+
 final _sonuc = <String>[];
 void _kontrol(String madde, bool gecti, [String ayrinti = '']) {
   final satir = 'SONUÇ|${gecti ? "GEÇTİ" : "KALDI"}|$madde|$ayrinti';
@@ -63,10 +65,11 @@ Future<List<String>> _menuOgeleri(WidgetTester t, String menu) async {
   return ogeler;
 }
 
+/// Ctrl+tuş (macOS'ta Cmd+tuş).
 Future<void> _ctrl(WidgetTester t, LogicalKeyboardKey tus) async {
-  await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await t.sendKeyDownEvent(kisayolTusu);
   await t.sendKeyEvent(tus);
-  await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await t.sendKeyUpEvent(kisayolTusu);
   await _bekle(t, const Duration(milliseconds: 800));
 }
 
@@ -94,8 +97,8 @@ void main() {
         _kontrol('Düzenle menüsünde "$k"', duzenle.contains(k));
       }
       final dosyaMenu = await _menuOgeleri(t, 'Dosya');
-      _kontrol('Dosya menüsünde "Sekmeyi Kapat" (Ctrl+W)',
-          dosyaMenu.contains('Sekmeyi Kapat') && dosyaMenu.contains('Ctrl+W'));
+      _kontrol('Dosya menüsünde "Sekmeyi Kapat" ($kisayolAdi+W)',
+          dosyaMenu.contains('Sekmeyi Kapat') && dosyaMenu.contains('$kisayolAdi+W'));
 
       // --- Düzenle menüsünden Tümünü Seç / Kopyala / Kes / Yapıştır
       await ed.createUntitled(content: 'bir\niki\nüç\ndört');

@@ -23,8 +23,8 @@
     },
     {
       "path": "calistirici.py",
-      "sha256": "625a7093a0840c810b81b62585d5a21a93dc28869c1d748040c4fad29d1d8834",
-      "size": 54958
+      "sha256": "158d0d4a76c2c933fa7f3f5934917d04ee791d14726ec3f363eeaeaf4580ce7e",
+      "size": 54876
     },
     {
       "path": "cikti_cevirici.py",
@@ -78,8 +78,8 @@
     },
     {
       "path": "ide_core.py",
-      "sha256": "b7d9c134f4ae87c7da8c8b01079f27d646358335727f62d87c270584985b8754",
-      "size": 276741
+      "sha256": "19962ce49dab30ec673e3de7713229c3d015e6c34cf9eae93681473cc39476c7",
+      "size": 276873
     },
     {
       "path": "kabuk.py",
@@ -153,8 +153,8 @@
     },
     {
       "path": "platform_katmani/__init__.py",
-      "sha256": "70f080cf5be4d03272b1ea422ac0938ad7af9f0c8dd0aca18a29ff42e601f447",
-      "size": 6292
+      "sha256": "2d21067e749cc9e98971986129d5aec9e7884b32fe9d25ba76bea081c13a9057",
+      "size": 6609
     },
     {
       "path": "platform_katmani/_ortak.py",

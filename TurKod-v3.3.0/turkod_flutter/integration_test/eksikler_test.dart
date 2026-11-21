@@ -16,6 +16,8 @@ import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart' as re;
 import 'package:turkod_ide/main.dart' as app;
 
+import 'ortak_platform.dart';
+
 final _rapor = <String>[];
 void _yaz(String madde, bool eksik, String ayrinti) {
   final satir = 'RAPOR|${eksik ? "EKSİK" : "VAR"}|$madde|$ayrinti';
@@ -59,13 +61,14 @@ Future<List<String>> _menuAc(WidgetTester t, String ad) async {
   return ogeler;
 }
 
+/// Ctrl(+Shift)+tuş (macOS'ta Cmd).
 Future<void> _kisayol(WidgetTester t, LogicalKeyboardKey tus,
     {bool shift = false}) async {
-  await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await t.sendKeyDownEvent(kisayolTusu);
   if (shift) await t.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
   await t.sendKeyEvent(tus);
   if (shift) await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-  await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await t.sendKeyUpEvent(kisayolTusu);
   await _bekle(t, const Duration(milliseconds: 700));
 }
 
@@ -97,7 +100,7 @@ void main() {
     final duzenle = menuler['Düzenle']!.join(' ');
     for (final k in ['Kes', 'Kopyala', 'Yapıştır', 'Tümünü Seç']) {
       _yaz('Düzenle menüsünde "$k"', !RegExp('\\b$k\\b').hasMatch(duzenle),
-          'Düzenle: ${menuler['Düzenle']!.where((s) => !s.startsWith('Ctrl') && !s.startsWith('Alt')).join(", ")}');
+          'Düzenle: ${menuler['Düzenle']!.where((s) => !s.startsWith(kisayolAdi) && !s.startsWith('Alt')).join(", ")}');
     }
     final tum = menuler.values.expand((e) => e).join(' | ');
     for (final (madde, desen) in [
