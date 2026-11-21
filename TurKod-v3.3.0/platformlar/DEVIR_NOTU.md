@@ -101,6 +101,20 @@ dökümü gelmez, ama işin özü bu notta.
   durur. Özel depoda dakika ve depolama sınırı var: önce "testler", sonra tek tek
   "linux" / "macos". Elle deneme: AppImage'ı Ubuntu canlı USB'de, .dmg'yi ödünç bir
   Mac'te aç (imzasız: Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç).
+- **2026-11-21: İlk gerçek denemeler (özel test deposu `turkod-ide-test`, GitHub
+  Actions):** Python testleri Ubuntu 22.04 ve macOS (arm64) üzerinde geçiyor. Linux
+  AppImage (183 MB, ~6 dk) ve macOS .dmg (339 MB, ~12 dk) derlendi, duman testi geçti,
+  uygulama açıldı ve sunucu bağlandı (ekran görüntüleri alındı). Bu denemelerde düzeltilen:
+  macOS'ta hata ayıklayıcının yerel modüle girmemesi (/var → /private/var), Kodi sohbet
+  numarası çakışması (3.3'ten), Windows'a bağlı iki test. Sonra: macOS menü çubuğu
+  Türkçe ve TürKod menülerinden üretiliyor (`_MenuBar._macMenuleri`, PlatformMenuBar),
+  uygulama adı "TürKod" (Info.plist CFBundleName/DisplayName, bölge `tr`), pencere
+  1280x800 ortada (MainFlutterWindow.swift); macOS'ta henüz derlenip görülmedi.
+  Açık kalanlar: elle arayüz denemesi (canlı USB / ödünç Mac); kitap; .dmg boyutu.
+- **Linux'u tarayıcıda arayüzüyle denemek:** depo kökünde `.devcontainer/` (GitHub
+  Codespaces + masaüstü). Actions'ın son `linux` paketini indirip açar
+  (`bash .devcontainer/turkod_ac.sh`; `kabuk` ile TürKod Kabuğu). Kullanım:
+  `.devcontainer/BENIOKU.md`. Henüz denenmedi.
 
 ## 2. Genel durum
 

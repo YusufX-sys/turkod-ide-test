@@ -3,7 +3,7 @@ import 'guncelleme.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, AppExitType;
 import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/gestures.dart'; // PointerScrollEvent buradan gelir
 import 'package:flutter/material.dart';
@@ -8476,8 +8476,50 @@ class _MenuBar extends StatelessWidget {
     'Yardım',
     'Güncelleştirmeler'
   ];
+  /// macOS'un ekranın üstündeki menü çubuğu: aynı eylemlerden üretilir (Flutter'ın
+  /// varsayılan İngilizce Edit/View/Window/Help menüsünün yerine). Kısayolları menü
+  /// gösterir ve çalıştırır; pencere içindeki menüler de durur.
+  List<PlatformMenuItem> _macMenuleri(BuildContext context) {
+    void calistir(String id) => findAction(actions, id)?.run(context);
+    return [
+      // İlk menünün başlığını macOS uygulama adından alır (Info.plist: TürKod).
+      PlatformMenu(label: 'TürKod', menus: [
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(label: 'TürKod Hakkında', onSelected: () => calistir('help.about')),
+        ]),
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(label: 'Ayarlar…', onSelected: () => calistir('view.settings')),
+        ]),
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(
+            label: "TürKod'tan Çık",
+            shortcut: const SingleActivator(LogicalKeyboardKey.keyQ, meta: true),
+            // Kaydedilmemiş dosyalar için çıkış sorusu (_cikisIstendi) burada da sorulur.
+            onSelected: () => ServicesBinding.instance.exitApplication(AppExitType.cancelable),
+          ),
+        ]),
+      ]),
+      for (final g in _groups)
+        if (actions.any((a) => a.menu == g && a.gorunur(context)))
+          PlatformMenu(label: g, menus: [
+            for (final a in actions.where((a) => a.menu == g && a.gorunur(context)))
+              PlatformMenuItem(
+                label: a.label,
+                shortcut: a.activator,
+                onSelected: () => a.run(context),
+              ),
+          ]),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final menuler = _menuSatiri(context);
+    if (!Platform.isMacOS) return menuler;
+    return PlatformMenuBar(menus: _macMenuleri(context), child: menuler);
+  }
+
+  Widget _menuSatiri(BuildContext context) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       for (final g in _groups)
         KeyedSubtree(

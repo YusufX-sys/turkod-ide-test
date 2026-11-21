@@ -1,0 +1,28 @@
+{
+  // TürKod'u Linux'ta, tarayıcıdan, arayüzüyle denemek için GitHub Codespaces ayarı.
+  // Kullanım: .devcontainer/BENIOKU.md
+  "name": "TürKod Linux denemesi",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    // Tarayıcıdan bağlanılan masaüstü (noVNC, 6080 numaralı bağlantı noktası).
+    "ghcr.io/devcontainers/features/desktop-lite:1": {},
+    // Actions'ın derlediği AppImage'ı indirmek için.
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [6080],
+  "portsAttributes": {
+    "6080": {
+      "label": "TürKod masaüstü",
+      "onAutoForward": "notify"
+    }
+  },
+  "containerEnv": {
+    "DISPLAY": ":1",
+    "LANG": "C.UTF-8",
+    "PYTHONUTF8": "1"
+  },
+  "postCreateCommand": "bash .devcontainer/hazirla.sh",
+  "hostRequirements": {
+    "cpus": 2
+  }
+}

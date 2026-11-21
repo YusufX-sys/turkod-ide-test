@@ -32,6 +32,9 @@ Ortak kod (`turkod_ide/`, `turkod_flutter/lib/`) burada değil, proje kökünde 
   (Linux ile ortak betik). İçindeki her `.so`/`.dylib` imzalama adımında ayrıca imzalanır.
 - Kodi'nin sesi: `say` komutu.
 - Kısayollarda Ctrl yerine Cmd kullanılır (kod tarafı yapıldı: `platform_ayarlari.dart`).
+- Ekranın üstündeki menü çubuğu Türkçe; TürKod'un kendi menülerinden üretilir
+  (`main.dart`, `_MenuBar._macMenuleri`). Uygulama adı "TürKod" (`Runner/Info.plist`);
+  paket klasörünün adı ASCII kalır: `TurKod.app`.
 - Veri klasörü: `~/Library/Application Support/TurKod`.
 - Flutter klasörü: `turkod_flutter/macos/` açıldı (2026-11-21). Uygulama `TurKod.app`,
   paket kimliği `org.turkod.TurKod` (Apple hesabına göre değiştirilebilir).

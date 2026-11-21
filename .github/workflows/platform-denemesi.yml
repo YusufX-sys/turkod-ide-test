@@ -142,7 +142,7 @@ jobs:
           open dist/macos/TurKod.app
           sleep 45
           screencapture -x ../sonuc/ekran-macos.png
-          osascript -e 'quit app "TurKod"' || true
+          osascript -e 'tell application id "org.turkod.TurKod" to quit' || true
       - name: Günlükleri topla
         if: always()
         run: |
