@@ -67,6 +67,9 @@ class SablonTestleri(unittest.TestCase):
                          r.stderr.decode("utf-8", "replace"))
 
 
+    # runner._tk_simge_kullanilsin: TürKod program simgesi (.ico) yalnızca
+    # Windows'ta verilir; Linux/macOS'ta pencere kütüphanenin kendi simgesiyle açılır.
+    @unittest.skipUnless(sys.platform == "win32", "Program simgesi yalnızca Windows'ta verilir")
     def test_simge_pencere_olusmadan_once_verilir(self):
         """Ursina'ya, Panda3D'ye ve pygame'e simge pencere açılmadan önce
         verilir (sonradan konan simge görev çubuğunda geç kalıyordu)."""

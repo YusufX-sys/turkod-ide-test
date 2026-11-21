@@ -223,15 +223,14 @@ class ArayuzSurecSizintiTestleri(unittest.TestCase):
             def durdur(self):
                 self.durduruldu = True
 
-        gercek_run = ad_modulu.subprocess.run
-
-        def sahte_run(args, *a, **k):
-            if args and args[0] == "taskkill":
-                raise ad_modulu.subprocess.TimeoutExpired(args, 10)
-            return gercek_run(args, *a, **k)
+        # Süreç ağacını kapatma (Windows'ta taskkill, Linux/macOS'ta killpg)
+        # zaman aşımına uğrar: süreç yine de öldürülmeli, gizleyici durmalı.
+        def sahte_oldur(pid, *a, **k):
+            raise ad_modulu.subprocess.TimeoutExpired(["taskkill"], 10)
 
         with mock.patch.object(ad_modulu, "_PencereGizleyici", SahteGizleyici), \
-                mock.patch.object(ad_modulu.subprocess, "run", side_effect=sahte_run), \
+                mock.patch.object(ad_modulu.platform_katmani, "sureci_agacla_oldur",
+                                  side_effect=sahte_oldur), \
                 mock.patch.object(ad_modulu.subprocess.Popen, "kill",
                                   autospec=True, side_effect=ad_modulu.subprocess.Popen.kill) as kill:
             sonuc = d._arayuz_calistir("import time\ntime.sleep(30)\n")
