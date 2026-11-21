@@ -575,7 +575,9 @@ class SembolikKlasorTestleri(unittest.TestCase):
         return ns["_yerel_modul_adi"]
 
     def test_ayni_klasorun_iki_yolu(self):
-        kok = tempfile.mkdtemp(prefix="turkod_pk_")
+        # realpath: macOS'un kendi geçici klasörü de /var -> /private/var bağlantısıdır;
+        # testin taklit ettiği bağlantı onunla karışmasın.
+        kok = os.path.realpath(tempfile.mkdtemp(prefix="turkod_pk_"))
         self.addCleanup(shutil.rmtree, kok, True)
         gercek = os.path.join(kok, "private", "var", "tmp")
         takma = os.path.join(kok, "var", "tmp")

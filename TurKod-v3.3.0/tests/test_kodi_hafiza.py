@@ -100,6 +100,25 @@ class HafizaTestleri(unittest.TestCase):
         self.assertEqual(len(self.h.sohbetler()), kodi_hafiza.EN_FAZLA_SOHBET)
 
 
+class AyniAndaSohbetTestleri(unittest.TestCase):
+    """Aynı milisaniyede açılan iki sohbet birbirinin üzerine yazmamalı
+    (hızlı bilgisayarda test_coklu_sohbet ara sıra bu yüzden bozuluyordu)."""
+
+    def setUp(self):
+        self.dizin = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dizin, True)
+        self.h = kodi_hafiza.KodiHafizasi(self.dizin)
+
+    def test_ayni_zamanda_iki_sohbet(self):
+        with mock.patch.object(kodi_hafiza.time, "time", return_value=1_800_000_000.123), \
+                mock.patch.object(kodi_hafiza.time, "strftime", return_value="20270115-080000"):
+            self.h.sohbet_kaydet([{"kodiden": False, "metin": "Birinci"}])
+            self.h.yeni_sohbet()
+            self.h.sohbet_kaydet([{"kodiden": False, "metin": "İkinci"}])
+        basliklar = [s["baslik"] for s in self.h.sohbetler()]
+        self.assertEqual(basliklar, ["İkinci", "Birinci"])
+
+
 class CekirdekTestleri(unittest.TestCase):
     def setUp(self):
         self.dizin = tempfile.mkdtemp()

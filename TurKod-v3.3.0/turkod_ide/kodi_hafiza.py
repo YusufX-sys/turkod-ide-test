@@ -107,9 +107,16 @@ class KodiHafizasi:
         except OSError:
             pass
 
-    @staticmethod
-    def _yeni_no():
-        return time.strftime("%Y%m%d-%H%M%S") + "-%03d" % (int(time.time() * 1000) % 1000)
+    def _yeni_no(self):
+        """Zamana göre sohbet numarası. Aynı milisaniyede açılan ikinci sohbet
+        (hızlı bilgisayarda) eskiden aynı numarayı alıp birincinin üzerine
+        yazıyordu: dosya varsa -1, -2 ... eklenir (sıralamada yine en yeni başta)."""
+        taban = time.strftime("%Y%m%d-%H%M%S") + "-%03d" % (int(time.time() * 1000) % 1000)
+        no, sira = taban, 0
+        while os.path.exists(self._sohbet_yolu(no)):
+            sira += 1
+            no = f"{taban}-{sira}"
+        return no
 
     @staticmethod
     def baslik_bul(mesajlar):
