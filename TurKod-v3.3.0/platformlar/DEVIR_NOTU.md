@@ -131,6 +131,13 @@ dökümü gelmez, ama işin özü bu notta.
   test"), Ctrl+W, Hakkında, Klavye kısayolları penceresi, kurtarma. Önce aynı testlerin
   Windows'ta geçip geçmediği (`arayuz-windows`) görülmeli: testler 3.3 arayüzüne göre
   eskimiş olabilir.
+  `arayuz-windows` (#8): Windows'ta da 5'i düştü (63 geçti, 2 kaldı). Sebepler ve
+  düzeltmeler: (1) uygulama kapanırken `_HomeShellState.dispose` içinde
+  `context.read` (yalnızca hata ayıklama kipinde görülen uyarı; sağlayıcı artık
+  initState'te saklanıyor), (2) menü kapanmadan ikincisine tıklanması (ortak
+  `menuyuAc`/`menuyuKapat` artık menünün gerçekten açılıp kapanmasını bekliyor),
+  (3) Ctrl+W artık sekmeyi kapattığı için eksikler testinde editör kalmaması,
+  (4) "Hatayı AI ile açıkla" dar panelde yalnızca simge (ipucu metniyle aranıyor).
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o

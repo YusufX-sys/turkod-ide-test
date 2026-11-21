@@ -18707,6 +18707,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _cikisSoruluyor = false;
 
   ValueNotifier<int>? _kurtarma;
+  EditorProvider? _editor;
   void _kurtarmaBildir() {
     final n = _kurtarma?.value ?? 0;
     if (n <= 0 || !mounted) return;
@@ -18840,10 +18841,11 @@ class _HomeShellState extends State<HomeShell> {
     _cikisDinleyici; // dinleyiciyi oluştur
     _ayarlar = context.read<SettingsProvider>()..addListener(_ayarlarDegisti);
     _uiDuzen = context.read<UiProvider>()..addListener(_duzenDegisti);
-    _kurtarma = context.read<EditorProvider>().kurtarilanDegisiklik
-      ..addListener(_kurtarmaBildir);
+    // dispose() içinde context kullanılamaz: sağlayıcı burada saklanır.
+    _editor = context.read<EditorProvider>();
+    _kurtarma = _editor!.kurtarilanDegisiklik..addListener(_kurtarmaBildir);
     final ayarlar = _ayarlar!;
-    context.read<EditorProvider>()
+    _editor!
       ..diskCakismasiSor = _diskCakismasiSor
       ..silinenDosyaSor = _silinenDosyaSor
       ..farkliKaydetHedefKirliSor = _farkliKaydetHedefKirliSor
@@ -19049,9 +19051,13 @@ class _HomeShellState extends State<HomeShell> {
     _ayarlar?.removeListener(_ayarlarDegisti);
     _kurtarma?.removeListener(_kurtarmaBildir);
     _uiDuzen?.removeListener(_duzenDegisti);
-    final ed = context.read<EditorProvider>();
-    if (ed.diskCakismasiSor == _diskCakismasiSor) ed.diskCakismasiSor = null;
-    if (ed.kayitUyarisi == _kayitUyarisi) ed.kayitUyarisi = null;
+    // Eskiden burada context.read çağrılıyordu: pencere kapanırken "deactivated
+    // widget's ancestor" hatası veriyordu (arayüz testlerinin sonunda görüldü).
+    final ed = _editor;
+    if (ed != null) {
+      if (ed.diskCakismasiSor == _diskCakismasiSor) ed.diskCakismasiSor = null;
+      if (ed.kayitUyarisi == _kayitUyarisi) ed.kayitUyarisi = null;
+    }
     _cikisDinleyici.dispose();
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();

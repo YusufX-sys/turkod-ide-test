@@ -50,14 +50,12 @@ List<String> _metinler(Finder kok) => [
     ].where((s) => s.trim().isNotEmpty).toList();
 
 Future<List<String>> _menuAc(WidgetTester t, String ad) async {
-  await t.tap(find.text(ad).first);
-  await _bekle(t, const Duration(milliseconds: 600));
+  await menuyuAc(t, ad);
   final ogeler = <String>[];
   for (final e in find.byWidgetPredicate((w) => w is PopupMenuItem).evaluate()) {
     ogeler.addAll(_metinler(find.byWidget(e.widget)));
   }
-  await t.sendKeyEvent(LogicalKeyboardKey.escape);
-  await _bekle(t, const Duration(milliseconds: 400));
+  await menuyuKapat(t);
   return ogeler;
 }
 
@@ -158,6 +156,11 @@ void main() {
       await _bekle(t, const Duration(milliseconds: 400));
     }
 
+    // Ctrl+W sekmeyi kapattıysa (4.0'da kapatır) editör kalmamıştır: yenisi açılır.
+    if (find.byType(re.CodeEditor).evaluate().isEmpty) {
+      await ed.createUntitled(content: 'bir\niki\nüç');
+      await _bekle(t, const Duration(seconds: 1));
+    }
     await t.tap(find.byType(re.CodeEditor).first);
     await _kisayol(t, LogicalKeyboardKey.keyG);
     final satiraGit = find.byType(AlertDialog).evaluate().isNotEmpty ||

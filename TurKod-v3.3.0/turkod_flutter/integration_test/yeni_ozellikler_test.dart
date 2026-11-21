@@ -170,8 +170,10 @@ void main() {
             !terminal.output.contains('number'),
         terminal.output.replaceAll('\n', ' ').trim());
     await _bekle(t, const Duration(milliseconds: 500));
+    // Dar panelde düğme yalnızca simgedir (ipucu metniyle); genişte yazılıdır.
     _yaz('Terminalde "Hatayı AI ile açıkla" düğmesi',
-        find.text('Hatayı AI ile açıkla').evaluate().isNotEmpty);
+        find.text('Hatayı AI ile açıkla').evaluate().isNotEmpty ||
+            find.byTooltip('Hatayı AI ile açıkla').evaluate().isNotEmpty);
     await _ekran('05_terminal_hata');
 
     // ------------------------------------------------ 4) biçimlendir (Shift+Alt+F)

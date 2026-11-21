@@ -46,22 +46,19 @@ Future<bool> _bulanaKadar(WidgetTester t, Finder f, {int sn = 60}) async {
 }
 
 Future<void> _menu(WidgetTester t, String menu, String oge) async {
-  await t.tap(find.text(menu).first);
-  await _bekle(t, const Duration(milliseconds: 600));
+  await menuyuAc(t, menu);
   await t.tap(find.text(oge).last);
   await _bekle(t, const Duration(milliseconds: 700));
 }
 
 Future<List<String>> _menuOgeleri(WidgetTester t, String menu) async {
-  await t.tap(find.text(menu).first);
-  await _bekle(t, const Duration(milliseconds: 600));
+  await menuyuAc(t, menu);
   final ogeler = [
     for (final e in find.byWidgetPredicate((w) => w is PopupMenuItem).evaluate())
       for (final m in find.descendant(of: find.byWidget(e.widget), matching: find.byType(Text)).evaluate())
         (m.widget as Text).data ?? ''
   ];
-  await t.sendKeyEvent(LogicalKeyboardKey.escape);
-  await _bekle(t, const Duration(milliseconds: 400));
+  await menuyuKapat(t);
   return ogeler;
 }
 
