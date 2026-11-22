@@ -11335,16 +11335,32 @@ class _CodeEditorState extends State<CodeEditor> {
   // imlecini gönderip seçimi sıfırlıyordu: menüden Tümünü Seç'ten sonra Kopyala ya
   // da Kopyala'dan sonra Kes yalnızca son satırı alıyordu (arayüz testlerindeki
   // teşhis: seçim menü açıkken tamdı, odak dönünce kayboluyordu). Eylemden sonraki
-  // seçim saklanır, odak verilir, metin değişmediyse seçim bir kare sonra geri konur.
+  // seçim saklanır, odak verilir; sonraki kısa sürede (sıfırlama bir kareden geç
+  // gelebiliyor) metin değişmeden seçim tek imlece inerse seçim geri konur.
   void _odaklaSecimiKoru() {
     final secim = _reCtrl.selection;
     final metin = _reCtrl.text;
-    _focus.requestFocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _reCtrl.text == metin && _reCtrl.selection != secim) {
+    if (!secim.isValid || secim.isCollapsed) {
+      _focus.requestFocus();
+      return;
+    }
+    final bitis = DateTime.now().add(const Duration(milliseconds: 700));
+    late final void Function() dinle;
+    dinle = () {
+      if (!mounted || DateTime.now().isAfter(bitis)) {
+        if (mounted) _reCtrl.removeListener(dinle);
+        return;
+      }
+      final s = _reCtrl.selection;
+      if (_reCtrl.text == metin && s.isValid && s.isCollapsed) {
         _reCtrl.selection = secim;
       }
+    };
+    _reCtrl.addListener(dinle);
+    Future<void>.delayed(const Duration(milliseconds: 750), () {
+      if (mounted) _reCtrl.removeListener(dinle);
     });
+    _focus.requestFocus();
   }
 
   void _kes() {
