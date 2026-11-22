@@ -7,6 +7,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'platform_ayarlari.dart';
+
 /// Ayar anahtarları (backend ayar dosyasında saklanır).
 const String kTurHerAcilista = 'arayuz_turu_her_acilista';
 const String kTurGoruldu = 'arayuz_turu_goruldu';
@@ -551,7 +553,7 @@ class _AciklamaKutusu extends StatelessWidget {
                           color: cs.onSurface.withValues(alpha: 0.6))),
                 ]),
                 const SizedBox(height: 10),
-                Text(adim.metin,
+                Text(kisayolluMetin(adim.metin), // macOS'ta Ctrl yerine Cmd
                     style: tema.textTheme.bodyMedium?.copyWith(height: 1.4)),
                 if (adim.ipucu != null) ...[
                   const SizedBox(height: 8),
@@ -559,7 +561,7 @@ class _AciklamaKutusu extends StatelessWidget {
                     Icon(Icons.lightbulb_outline, size: 15, color: cs.tertiary),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(adim.ipucu!,
+                      child: Text(kisayolluMetin(adim.ipucu!),
                           style: tema.textTheme.bodySmall?.copyWith(
                               color: cs.onSurface.withValues(alpha: 0.75))),
                     ),

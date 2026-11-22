@@ -786,6 +786,13 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
     def baslik(metin):
         yaz(f"[EXE] {metin}")
 
+    if not platform_katmani.windows_mu():
+        # Üretilen program Windows .exe'sidir (Windows konsolu, .ico simgesi,
+        # Windows ileti kutuları). Linux/macOS'ta yarı yolda bozuk bir dosya
+        # üretmek yerine açıkça söylenir.
+        yaz("[HATA] EXE'ye Dönüştür şimdilik yalnızca Windows'ta çalışır. Programını "
+            "Windows'ta TürKod ile açarak EXE yapabilirsin.")
+        return None
     dosya = os.path.abspath(os.path.expanduser(dosya))
     if kod is None:
         if not os.path.isfile(dosya) and os.path.isfile(dosya + calistirici.UZANTI):

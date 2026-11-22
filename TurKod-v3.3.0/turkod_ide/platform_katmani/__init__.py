@@ -152,6 +152,35 @@ def dosya_iliskisi_kaldir():
 # --------------------------------------------------------------------------
 # Kullanıcı programlarını çalıştıran Python
 # --------------------------------------------------------------------------
+def cop_kutusu_adi():
+    """"Geri Dönüşüm Kutusu" (Windows), "Çöp Kutusu" (macOS), "Çöp" (Linux)."""
+    return secili().COP_KUTUSU_ADI
+
+
+def cop_kutusu_var_mi(yol):
+    """Linux/macOS: öğe çöp kutusuyla aynı diskte mi (Windows: ide_core kendi bakar)."""
+    return secili().cop_kutusu_var_mi(yol)
+
+
+def cop_kutusuna_tasi(yol):
+    """Linux/macOS: öğeyi çöp kutusuna taşır; hata olursa OSError."""
+    return secili().cop_kutusuna_tasi(yol)
+
+
+def bellek_gb():
+    """(toplam, kullanılabilir) GB ya da None (Windows: yerel_modeller kendi ölçer)."""
+    return secili().bellek_gb()
+
+
+def mikrofon_komutu(ornekleme):
+    """Linux/macOS: 16 bit tek kanal ham ses akıtan kayıt komutu ya da None."""
+    return secili().mikrofon_komutu(ornekleme)
+
+
+def mikrofon_yok_mesaji():
+    return getattr(secili(), "MIKROFON_YOK", "Bu sistemde mikrofon desteklenmiyor.")
+
+
 def turkod_komutu_dosyasi():
     """Paketli uygulamada `turkod` komutunun (konsollu giriş) dosyası:
     Windows'ta <backend>\\turkod.exe, Linux/macOS'ta <backend>/turkod."""

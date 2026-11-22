@@ -796,6 +796,9 @@ class IDECore:
     def _cop_kutusu_var_mi(yol):
         """Öğenin bulunduğu sürücüde Geri Dönüşüm Kutusu var mı? USB bellek,
         hafıza kartı, ağ klasörü, CD ve RAM diskte yoktur."""
+        if not platform_katmani.windows_mu():
+            # Linux/macOS: öğe kullanıcının çöp kutusuyla aynı diskte mi.
+            return platform_katmani.cop_kutusu_var_mi(yol)
         import ctypes
         tampon = ctypes.create_unicode_buffer(1024)
         if not ctypes.windll.kernel32.GetVolumePathNameW(
@@ -808,6 +811,14 @@ class IDECore:
         "Bu sürücüde (USB bellek, hafıza kartı ya da ağ klasörü) Geri Dönüşüm "
         "Kutusu yok: silinen öğe geri getirilemez. Yine de kalıcı olarak silinsin mi?")
 
+    @classmethod
+    def _kalici_silme_sorusu(cls):
+        if platform_katmani.windows_mu():
+            return cls._KALICI_SILME_SORUSU
+        return (f"Bu sürücüde (USB bellek, hafıza kartı ya da ağ klasörü) "
+                f"{platform_katmani.cop_kutusu_adi()} yok: silinen öğe geri getirilemez. "
+                "Yine de kalıcı olarak silinsin mi?")
+
     def oge_sil(self, yol, kalici=False):
         """Öğeyi Geri Dönüşüm Kutusu'na taşır (kalıcı silmez). Geri dönüşüm
         kutusu kullanılamıyorsa silmez; {"ok": False, "kalici_gerekir": True}
@@ -816,8 +827,6 @@ class IDECore:
         "başarılı" dönüyordu."""
         if not yol or not os.path.exists(yol):
             return {"ok": False, "hata": "Öğe bulunamadı."}
-        if not platform_katmani.windows_mu():
-            return {"ok": False, "hata": "Silme yalnızca Windows'ta destekleniyor."}
         if kalici:
             try:
                 if os.path.isdir(yol) and not os.path.islink(yol):
@@ -833,7 +842,17 @@ class IDECore:
             cop_var = False
         if not cop_var:
             return {"ok": False, "kalici_gerekir": True, "yol": yol,
-                    "hata": self._KALICI_SILME_SORUSU}
+                    "hata": self._kalici_silme_sorusu()}
+        if not platform_katmani.windows_mu():
+            # Linux/macOS: kullanıcının çöp kutusuna taşınır (eskiden Linux ve
+            # macOS'ta Gezgin'den silme hiç çalışmıyordu).
+            try:
+                platform_katmani.cop_kutusuna_tasi(yol)
+            except Exception as e:
+                return {"ok": False, "hata": _dosya_hatasi(e)}
+            if os.path.lexists(yol):
+                return {"ok": False, "hata": "Silinemedi."}
+            return {"ok": True, "yol": yol}
         try:
             import ctypes
             from ctypes import wintypes

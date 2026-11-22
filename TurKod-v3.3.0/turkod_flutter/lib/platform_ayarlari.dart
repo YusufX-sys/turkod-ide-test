@@ -139,6 +139,30 @@ String platformKisayolMetni(String metin, [Isletim? isletim]) {
 String metaTusAdi([Isletim? isletim]) =>
     (isletim ?? suankiIsletim) == Isletim.macos ? 'Cmd' : 'Win';
 
+/// Ekran metinlerinde sabit yazılmış kısayolları sisteme uydurur: macOS'ta
+/// "Ctrl+Shift+P" -> "Cmd+Shift+P" (cümle içinde de).
+String kisayolluMetin(String metin, [Isletim? isletim]) =>
+    (isletim ?? suankiIsletim) == Isletim.macos ? metin.replaceAll('Ctrl+', 'Cmd+') : metin;
+
+// ---------------------------------------------------------------------------
+// Çöp kutusu (Gezgin'de silme)
+// ---------------------------------------------------------------------------
+
+/// Çöp kutusunun adı yönelme ekiyle: "Geri Dönüşüm Kutusu'na" (Windows),
+/// "Çöp Kutusu'na" (macOS), "Çöp'e" (Linux).
+String copKutusunaMetni([Isletim? isletim]) => switch (isletim ?? suankiIsletim) {
+      Isletim.windows => "Geri Dönüşüm Kutusu'na",
+      Isletim.macos => "Çöp Kutusu'na",
+      Isletim.linux => "Çöp'e",
+    };
+
+// ---------------------------------------------------------------------------
+// Windows'a özgü özellikler
+// ---------------------------------------------------------------------------
+
+/// EXE'ye Dönüştür yalnızca Windows'ta (üretilen dosya Windows programıdır).
+bool exeDonusturmeVar([Isletim? isletim]) => (isletim ?? suankiIsletim) == Isletim.windows;
+
 // ---------------------------------------------------------------------------
 // Gömülü tarayıcı
 // ---------------------------------------------------------------------------

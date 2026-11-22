@@ -25,6 +25,65 @@ def veri_tabani(yedek=None):
     return os.path.join(os.path.expanduser("~"), "Library", "Application Support")
 
 
+COP_KUTUSU_ADI = "Çöp Kutusu"
+
+
+def cop_kutusu_klasoru():
+    return os.path.join(os.path.expanduser("~"), ".Trash")
+
+
+def cop_kutusu_var_mi(yol):
+    return _posix.ayni_disk_mi(yol, cop_kutusu_klasoru())
+
+
+def cop_kutusuna_tasi(yol):
+    """Öğeyi ~/.Trash'e taşır (aynı adda öğe varsa "ad 2" ...)."""
+    kok = cop_kutusu_klasoru()
+    os.makedirs(kok, exist_ok=True)
+    mutlak = os.path.abspath(yol)
+    ad = _posix.benzersiz_ad(kok, os.path.basename(mutlak.rstrip("/")) or "adsiz")
+    os.rename(mutlak, os.path.join(kok, ad))
+
+
+def bellek_gb():
+    """(toplam, kullanılabilir) GB. macOS'ta os.sysconf("SC_AVPHYS_PAGES") yoktur:
+    toplam sysctl hw.memsize'dan, kullanılabilir vm_stat'tan (boş + etkin olmayan
+    + temizlenebilir sayfalar) okunur."""
+    try:
+        toplam = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True,
+                                    text=True, timeout=5).stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    bos = 0.0
+    try:
+        cikti = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=5).stdout
+        import re
+        sayfa = int((re.search(r"page size of (\d+)", cikti) or [0, 4096])[1])
+        sayilar = {m.group(1): int(m.group(2))
+                   for m in re.finditer(r"^Pages ([a-z ]+):\s+(\d+)", cikti, re.M)}
+        bos = sum(sayilar.get(k, 0) for k in ("free", "inactive", "purgeable",
+                                               "speculative")) * sayfa
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return toplam / 2**30, bos / 2**30
+
+
+# macOS'ta hazır bir komut satırı kayıt programı yoktur; SoX (`brew install sox`)
+# kuruluysa kullanılır.
+MIKROFON_PROGRAMLARI = (
+    ("rec", lambda o: ["-q", "-t", "raw", "-b", "16", "-e", "signed-integer", "-c", "1",
+                       "-r", str(o), "-"]),
+    ("sox", lambda o: ["-q", "-d", "-t", "raw", "-b", "16", "-e", "signed-integer", "-c", "1",
+                       "-r", str(o), "-"]),
+)
+MIKROFON_YOK = ("macOS'ta mikrofonu dinlemek için SoX gerekiyor. Terminalde "
+                "'brew install sox' ile kurarsan Kodi'yle sesli konuşabilirsin.")
+
+
+def mikrofon_komutu(ornekleme):
+    return _posix.mikrofon_komutu(ornekleme, MIKROFON_PROGRAMLARI)
+
+
 def editor_dosyasi(backend):
     """TurKod.app/Contents/MacOS/TurKod (sunucu Contents/Resources/backend içinde)."""
     return os.path.join(os.path.dirname(os.path.dirname(backend)), "MacOS", "TurKod")

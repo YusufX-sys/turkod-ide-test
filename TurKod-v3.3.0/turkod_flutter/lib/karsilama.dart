@@ -52,8 +52,12 @@ class KarsilamaEkrani extends StatelessWidget {
     final cs = theme.colorScheme;
     final ed = context.watch<EditorProvider>();
     final son = ed.recentFiles.take(6).toList();
-    final ipucu =
-        kKarsilamaIpuclari[DateTime.now().day % kKarsilamaIpuclari.length];
+    // macOS'ta Ctrl yerine Cmd yazılır; EXE ipucu yalnızca Windows'ta gösterilir.
+    final ipuclari = [
+      for (final i in kKarsilamaIpuclari)
+        if (exeDonusturmeVar() || !i.contains('EXE')) kisayolluMetin(i),
+    ];
+    final ipucu = ipuclari[DateTime.now().day % ipuclari.length];
 
     const kartlar = <_BaslaKarti>[
       _BaslaKarti(Icons.note_add_outlined, 'Yeni Dosya',

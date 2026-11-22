@@ -6630,20 +6630,23 @@ List<AppAction> _tanimliEylemler() {
       icon: Icons.tune,
       run: (c) => _runArgsDialog(c),
     ),
-    AppAction(
-      id: 'run.exe',
-      label: "EXE'ye Dönüştür…",
-      menu: 'Çalıştır',
-      icon: Icons.inventory_2_outlined,
-      run: (c) => exeDonusturmePaneliAc(c),
-    ),
-    AppAction(
-      id: 'run.exe_kaynak',
-      label: "EXE'nin Kaynak Kodunu Aç…",
-      menu: 'Çalıştır',
-      icon: Icons.source_outlined,
-      run: (c) => exeKaynaginiAc(c),
-    ),
+    // EXE'ye Dönüştür yalnızca Windows'ta: Linux/macOS menüsünde görünmez.
+    if (exeDonusturmeVar()) ...[
+      AppAction(
+        id: 'run.exe',
+        label: "EXE'ye Dönüştür…",
+        menu: 'Çalıştır',
+        icon: Icons.inventory_2_outlined,
+        run: (c) => exeDonusturmePaneliAc(c),
+      ),
+      AppAction(
+        id: 'run.exe_kaynak',
+        label: "EXE'nin Kaynak Kodunu Aç…",
+        menu: 'Çalıştır',
+        icon: Icons.source_outlined,
+        run: (c) => exeKaynaginiAc(c),
+      ),
+    ],
     AppAction(
       id: 'run.breakpoint_clear',
       label: 'Tüm Kesme Noktalarını Kaldır',
@@ -8960,7 +8963,7 @@ Future<void> _explorerDelete(BuildContext context, FileNode node) async {
     builder: (dc) => AlertDialog(
       title: Text(node.isDir ? 'Klasörü sil' : 'Dosyayı sil'),
       content: Text('"${node.name}"${node.isDir ? ' ve içindekiler' : ''} '
-          'Geri Dönüşüm Kutusu\'na taşınsın mı?'),
+          '${copKutusunaMetni()} taşınsın mı?'),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(dc, false),
@@ -9008,7 +9011,7 @@ Future<void> _explorerDelete(BuildContext context, FileNode node) async {
         context,
         sonuc.kalici
             ? '"${node.name}" kalıcı olarak silindi'
-            : '"${node.name}" Geri Dönüşüm Kutusu\'na taşındı',
+            : '"${node.name}" ${copKutusunaMetni()} taşındı',
         kind: SnackKind.success);
   }
 }

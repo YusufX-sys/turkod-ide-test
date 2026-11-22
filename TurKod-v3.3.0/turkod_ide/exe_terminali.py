@@ -119,9 +119,11 @@ def _pencere_hazirla(tk, baslik, en, boy):
 def _yazi_tipleri(kok):
     import tkinter.font as tkfont
     aileler = set(tkfont.families(kok))
-    mono = next((a for a in ("Cascadia Mono", "Consolas", "Courier New") if a in aileler),
+    mono = next((a for a in ("Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono",
+                             "Liberation Mono", "Courier New") if a in aileler),
                 "TkFixedFont")
-    arayuz = next((a for a in ("Segoe UI Variable Text", "Segoe UI") if a in aileler),
+    arayuz = next((a for a in ("Segoe UI Variable Text", "Segoe UI", "Helvetica Neue",
+                               "Ubuntu", "DejaVu Sans") if a in aileler),
                   "TkDefaultFont")
     return tkfont.Font(kok, family=mono, size=11), tkfont.Font(kok, family=arayuz, size=10)
 

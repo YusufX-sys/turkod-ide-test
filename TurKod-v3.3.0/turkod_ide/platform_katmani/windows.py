@@ -137,6 +137,19 @@ def editoru_ayri_baslat(exe, dosyalar=()):
         return False
 
 
+COP_KUTUSU_ADI = "Geri Dönüşüm Kutusu"
+# Windows'ta çöp kutusu ve mikrofon kendi API'leriyle (ide_core.oge_sil,
+# kodi_ses._mikrofon_parcalari); RAM yerel_modeller._ram_gb içinde.
+
+
+def bellek_gb():
+    return None
+
+
+def mikrofon_komutu(ornekleme):
+    return None
+
+
 def editor_dosyasi(backend):
     """<kurulum>\\turkod_flutter.exe (backend\\ klasörünün bir üstü)."""
     return os.path.join(os.path.dirname(backend), "turkod_flutter.exe")

@@ -58,6 +58,11 @@ def yakala(kip):
         return None, "görüntü kütüphanesi yok"
     try:
         if kip == "pencere":
+            if not platform_katmani.windows_mu():
+                # TürKod penceresini bulmak Windows'a özgü; ekranın tamamı
+                # gönderilmez (kullanıcı yalnızca TürKod penceresini seçmişti).
+                return None, ("yalnızca TürKod penceresi kipi bu sistemde yok; Ayarlar → "
+                              "Kodi'de 'ekran' seçilebilir")
             kutu = _turkod_penceresi()
             if kutu is None:
                 return None, "TürKod penceresi görünmüyor"

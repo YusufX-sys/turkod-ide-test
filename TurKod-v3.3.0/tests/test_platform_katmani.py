@@ -556,6 +556,153 @@ class TurkodKomutuTestleri(unittest.TestCase):
         self.assertEqual(komut, f'"{os.path.join(self.kok, "turkod")}" --surum')
 
 
+class CopKutusuTestleri(unittest.TestCase):
+    """Gezgin'de silme: Linux'ta freedesktop çöp kutusu, macOS'ta ~/.Trash
+    (eskiden bu sistemlerde silme hiç çalışmıyordu)."""
+
+    def setUp(self):
+        self.kok = tempfile.mkdtemp(prefix="turkod_pk_")
+        self.addCleanup(shutil.rmtree, self.kok, True)
+        self.ev = os.path.join(self.kok, "ev")
+        self.proje = os.path.join(self.ev, "proje")
+        os.makedirs(self.proje)
+        self.dosya = os.path.join(self.proje, "oyun.trpy")
+        with open(self.dosya, "w", encoding="utf-8") as f:
+            f.write('yazdır("x")\n')
+
+    def test_linux_trashinfo_ile_tasir(self):
+        veri = os.path.join(self.ev, "veri")
+        with sistem("linux"), mock.patch.dict(os.environ, {"XDG_DATA_HOME": veri}):
+            self.assertTrue(pk.cop_kutusu_var_mi(self.dosya))
+            pk.cop_kutusuna_tasi(self.dosya)
+            # Aynı adda ikinci dosya: "oyun 2.trpy"
+            with open(self.dosya, "w", encoding="utf-8") as f:
+                f.write("2")
+            pk.cop_kutusuna_tasi(self.dosya)
+        self.assertFalse(os.path.exists(self.dosya))
+        dosyalar = sorted(os.listdir(os.path.join(veri, "Trash", "files")))
+        self.assertEqual(dosyalar, ["oyun 2.trpy", "oyun.trpy"])
+        with open(os.path.join(veri, "Trash", "info", "oyun.trpy.trashinfo"),
+                  encoding="utf-8") as f:
+            bilgi = f.read()
+        self.assertTrue(bilgi.startswith("[Trash Info]\n"))
+        self.assertIn("Path=", bilgi)
+        self.assertIn("oyun.trpy", bilgi)
+        self.assertIn("DeletionDate=", bilgi)
+
+    def test_macos_trash_klasoru(self):
+        with sistem("darwin"), mock.patch.object(os.path, "expanduser",
+                                                 side_effect=lambda p: p.replace("~", self.ev)):
+            pk.cop_kutusuna_tasi(self.dosya)
+        self.assertTrue(os.path.isfile(os.path.join(self.ev, ".Trash", "oyun.trpy")))
+
+    def test_cop_kutusu_adlari(self):
+        for ad, beklenen in (("win32", "Geri Dönüşüm Kutusu"), ("darwin", "Çöp Kutusu"),
+                             ("linux", "Çöp")):
+            with sistem(ad):
+                self.assertEqual(pk.cop_kutusu_adi(), beklenen)
+
+    def test_ide_linuxta_siler(self):
+        from turkod_ide.ide_core import IDECore
+        veri = os.path.join(self.ev, "veri")
+        with sistem("linux"), mock.patch.dict(os.environ, {"XDG_DATA_HOME": veri}):
+            r = IDECore.oge_sil(types.SimpleNamespace(
+                _cop_kutusu_var_mi=IDECore._cop_kutusu_var_mi,
+                _kalici_silme_sorusu=IDECore._kalici_silme_sorusu), self.dosya)
+        self.assertEqual(r, {"ok": True, "yol": self.dosya})
+        self.assertTrue(os.path.isfile(os.path.join(veri, "Trash", "files", "oyun.trpy")))
+
+    def test_baska_diskte_kalici_silme_sorulur(self):
+        from turkod_ide.ide_core import IDECore
+        with sistem("darwin"), mock.patch.object(pk, "cop_kutusu_var_mi", return_value=False):
+            r = IDECore.oge_sil(types.SimpleNamespace(
+                _cop_kutusu_var_mi=IDECore._cop_kutusu_var_mi,
+                _kalici_silme_sorusu=IDECore._kalici_silme_sorusu), self.dosya)
+        self.assertTrue(r["kalici_gerekir"])
+        self.assertIn("Çöp Kutusu yok", r["hata"])
+        self.assertTrue(os.path.exists(self.dosya))
+
+
+class BellekOlcumuTestleri(unittest.TestCase):
+    def test_linux_meminfo(self):
+        meminfo = "MemTotal:       16384000 kB\nMemFree:  1000 kB\nMemAvailable:    8192000 kB\n"
+        with sistem("linux"), mock.patch("builtins.open", mock.mock_open(read_data=meminfo)):
+            toplam, bos = pk.bellek_gb()
+        self.assertAlmostEqual(toplam, 16384000 / 2**20)
+        self.assertAlmostEqual(bos, 8192000 / 2**20)
+
+    def test_macos_sysctl_vm_stat(self):
+        vm = ("Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+              "Pages free:                               1000.\n"
+              "Pages active:                             5000.\n"
+              "Pages inactive:                           2000.\n"
+              "Pages speculative:                         500.\n"
+              "Pages purgeable:                           100.\n")
+
+        def calistir(komut, **k):
+            return mock.Mock(stdout=str(8 * 2**30) if komut[0] == "sysctl" else vm)
+        with sistem("darwin"), mock.patch.object(subprocess, "run", side_effect=calistir):
+            toplam, bos = pk.bellek_gb()
+        self.assertEqual(toplam, 8.0)
+        self.assertAlmostEqual(bos, (1000 + 2000 + 500 + 100) * 16384 / 2**30)
+
+    def test_yerel_modeller_macosta_sifir_degil(self):
+        from turkod_ide import yerel_modeller
+        with sistem("darwin"), mock.patch.object(pk, "bellek_gb", return_value=(8.0, 3.0)):
+            self.assertEqual(yerel_modeller._ram_gb(), (8.0, 3.0))
+
+
+class MikrofonTestleri(unittest.TestCase):
+    def test_linux_arecord(self):
+        with sistem("linux"), mock.patch.object(shutil, "which",
+                                                side_effect=lambda a: "/usr/bin/arecord" if a == "arecord" else None):
+            komut = pk.mikrofon_komutu(16000)
+        self.assertEqual(komut[0], "/usr/bin/arecord")
+        self.assertIn("S16_LE", komut)
+        self.assertIn("16000", komut)
+
+    def test_macos_sox_yoksa_aciklama(self):
+        with sistem("darwin"), mock.patch.object(shutil, "which", return_value=None):
+            self.assertIsNone(pk.mikrofon_komutu(16000))
+            self.assertIn("brew install sox", pk.mikrofon_yok_mesaji())
+
+    def test_kodi_ses_kayit_programindan_okur(self):
+        boyut = int(kodi_ses.ORNEKLEME * 2 * kodi_ses.PARCA_SN)
+        surec = mock.Mock()
+        surec.stdout = io.BytesIO(b"\x01" * boyut * 2)
+        surec.stderr = io.BytesIO(b"")
+        with sistem("linux"), mock.patch.object(pk, "mikrofon_komutu", return_value=["arecord"]), \
+                mock.patch.object(subprocess, "Popen", return_value=surec):
+            uretec = kodi_ses._mikrofon_parcalari(None)
+            self.assertEqual(len(next(uretec)), boyut)
+            self.assertEqual(len(next(uretec)), boyut)
+            with self.assertRaises(kodi_ses.SesHatasi):
+                next(uretec)   # akış bitti: mikrofon yok sayılır
+        surec.terminate.assert_called()
+
+    def test_kayit_programi_yoksa_turkce_hata(self):
+        with sistem("linux"), mock.patch.object(pk, "mikrofon_komutu", return_value=None):
+            with self.assertRaises(kodi_ses.SesHatasi) as h:
+                next(kodi_ses._mikrofon_parcalari(None))
+        self.assertIn("alsa-utils", str(h.exception))
+
+
+class WindowsaOzguOzellikTestleri(unittest.TestCase):
+    def test_exe_donusturme_linuxta_aciklar(self):
+        from turkod_ide import exe_donusturucu
+        cikti = []
+        with sistem("linux"):
+            self.assertIsNone(exe_donusturucu.exe_yap("oyun.trpy", {}, yaz=cikti.append))
+        self.assertIn("yalnızca Windows", cikti[0])
+
+    def test_kodi_pencere_goruntusu_linuxta_aciklama(self):
+        from turkod_ide import kodi_goruntu
+        with sistem("linux"):
+            veri, aciklama = kodi_goruntu.yakala("pencere")
+        self.assertIsNone(veri)
+        self.assertIn("ekran", aciklama)
+
+
 class PaketlemeBetikleriTestleri(unittest.TestCase):
     """Derleme betiklerindeki paket düzeni, kodun beklediği yollarla aynı mı?"""
 

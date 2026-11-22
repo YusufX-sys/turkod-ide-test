@@ -871,9 +871,13 @@ class TerminalPenceresi:
         kok.minsize(self.o(520), self.o(300))
 
         aileler = set(tkfont.families(kok))
+        # Windows, macOS ve Linux'ta hazır gelen yazı tipleri (sırayla denenir).
         mono = next((a for a in ("Cascadia Mono", "Cascadia Code", "JetBrains Mono",
-                                 "Consolas", "Courier New") if a in aileler), "TkFixedFont")
-        arayuz = next((a for a in ("Segoe UI Variable Text", "Segoe UI")
+                                 "Consolas", "Menlo", "SF Mono", "DejaVu Sans Mono",
+                                 "Ubuntu Mono", "Liberation Mono", "Courier New")
+                     if a in aileler), "TkFixedFont")
+        arayuz = next((a for a in ("Segoe UI Variable Text", "Segoe UI", "SF Pro Text",
+                                   "Helvetica Neue", "Ubuntu", "Cantarell", "DejaVu Sans")
                        if a in aileler), "TkDefaultFont")
         self.f_kod = tkfont.Font(kok, family=mono, size=11)
         self.f_kod_k = tkfont.Font(kok, family=mono, size=11, weight="bold")

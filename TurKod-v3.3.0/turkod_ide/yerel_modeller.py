@@ -175,6 +175,13 @@ def _ram_gb():
                 return d.ullTotalPhys / 2**30, d.ullAvailPhys / 2**30
         except Exception:  # noqa: BLE001
             pass
+    else:
+        # Linux: /proc/meminfo (önbellek dahil kullanılabilir bellek); macOS:
+        # sysctl + vm_stat. macOS'ta SC_AVPHYS_PAGES yoktu: RAM 0 GB sayılıyor,
+        # model önerileri bozuluyordu.
+        olcum = platform_katmani.bellek_gb()
+        if olcum:
+            return olcum
     try:
         sayfa = os.sysconf("SC_PAGE_SIZE")
         return (os.sysconf("SC_PHYS_PAGES") * sayfa / 2**30,

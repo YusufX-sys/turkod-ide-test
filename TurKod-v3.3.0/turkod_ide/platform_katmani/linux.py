@@ -98,6 +98,81 @@ def _yollar():
     }
 
 
+COP_KUTUSU_ADI = "Çöp"
+
+
+def cop_kutusu_klasoru():
+    """freedesktop.org çöp kutusu: $XDG_DATA_HOME/Trash (varsayılan ~/.local/share/Trash)."""
+    return os.path.join(veri_tabani(), "Trash")
+
+
+def cop_kutusu_var_mi(yol):
+    return _posix.ayni_disk_mi(yol, cop_kutusu_klasoru())
+
+
+def cop_kutusuna_tasi(yol):
+    """Öğeyi freedesktop.org Trash standardına göre taşır: dosya Trash/files'a,
+    geri yükleme bilgisi Trash/info/<ad>.trashinfo'ya. Dosyalar uygulaması
+    (Nautilus, Dolphin ...) öğeyi buradan geri yükleyebilir."""
+    import time
+    import urllib.parse
+    kok = cop_kutusu_klasoru()
+    dosyalar, bilgi = os.path.join(kok, "files"), os.path.join(kok, "info")
+    os.makedirs(dosyalar, exist_ok=True)
+    os.makedirs(bilgi, exist_ok=True)
+    mutlak = os.path.abspath(yol)
+    taban = os.path.basename(mutlak.rstrip("/")) or "adsiz"
+    kok_ad, uzanti = os.path.splitext(taban)
+    ad, n = taban, 1
+    while (os.path.lexists(os.path.join(dosyalar, ad))
+           or os.path.lexists(os.path.join(bilgi, ad + ".trashinfo"))):
+        n += 1
+        ad = f"{kok_ad} {n}{uzanti}"
+    bilgi_yolu = os.path.join(bilgi, ad + ".trashinfo")
+    with open(bilgi_yolu, "w", encoding="utf-8") as f:
+        f.write("[Trash Info]\n"
+                f"Path={urllib.parse.quote(mutlak)}\n"
+                f"DeletionDate={time.strftime('%Y-%m-%dT%H:%M:%S')}\n")
+    try:
+        os.rename(mutlak, os.path.join(dosyalar, ad))
+    except OSError:
+        os.remove(bilgi_yolu)
+        raise
+
+
+def bellek_gb():
+    """(toplam, kullanılabilir) GB: /proc/meminfo (MemAvailable, önbellek dahil)."""
+    degerler = {}
+    try:
+        with open("/proc/meminfo", encoding="ascii") as f:
+            for satir in f:
+                ad, _, kalan = satir.partition(":")
+                parca = kalan.split()
+                if parca:
+                    degerler[ad] = int(parca[0])   # kB
+    except (OSError, ValueError):
+        return None
+    if "MemTotal" not in degerler:
+        return None
+    bos = degerler.get("MemAvailable", degerler.get("MemFree", 0))
+    return degerler["MemTotal"] / 2**20, bos / 2**20
+
+
+# arecord (alsa-utils) masaüstü dağıtımlarının çoğunda kuruludur.
+MIKROFON_PROGRAMLARI = (
+    ("arecord", lambda o: ["-q", "-f", "S16_LE", "-r", str(o), "-c", "1", "-t", "raw"]),
+    ("parecord", lambda o: ["--raw", "--format=s16le", f"--rate={o}", "--channels=1"]),
+    ("rec", lambda o: ["-q", "-t", "raw", "-b", "16", "-e", "signed-integer", "-c", "1",
+                       "-r", str(o), "-"]),
+)
+MIKROFON_YOK = ("Mikrofonu dinleyecek bir program bulunamadı. 'alsa-utils' paketini "
+                "(arecord) kurarsan Kodi'yle sesli konuşabilirsin.")
+
+
+def mikrofon_komutu(ornekleme):
+    return _posix.mikrofon_komutu(ornekleme, MIKROFON_PROGRAMLARI)
+
+
 def editor_dosyasi(backend):
     """<uygulama>/turkod_flutter (backend/ klasörünün bir üstü)."""
     return os.path.join(os.path.dirname(backend), "turkod_flutter")

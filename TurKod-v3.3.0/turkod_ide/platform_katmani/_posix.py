@@ -151,6 +151,42 @@ def kabuk_kod_sayfasi():
     return "utf-8"
 
 
+# --------------------------------------------------------------------------
+# Çöp kutusu (Gezgin'de "sil")
+# --------------------------------------------------------------------------
+def ayni_disk_mi(yol, klasor):
+    """yol ile klasör aynı dosya sisteminde mi? Değilse taşımak kopyalamak demektir
+    (USB bellek, ağ klasörü): o zaman çöp kutusu yok sayılır, kalıcı silme sorulur."""
+    try:
+        os.makedirs(klasor, exist_ok=True)
+        return os.stat(os.path.abspath(yol)).st_dev == os.stat(klasor).st_dev
+    except OSError:
+        return False
+
+
+def benzersiz_ad(klasor, ad):
+    """klasor içinde boş bir ad: "ad", "ad 2", "ad 3" ... (uzantı korunur)."""
+    kok, uzanti = os.path.splitext(ad)
+    aday, n = ad, 1
+    while os.path.lexists(os.path.join(klasor, aday)):
+        n += 1
+        aday = f"{kok} {n}{uzanti}"
+    return aday
+
+
+# --------------------------------------------------------------------------
+# Mikrofon (Kodi ile sesli konuşma): dış kayıt programı ham ses akıtır
+# --------------------------------------------------------------------------
+def mikrofon_komutu(ornekleme, adaylar):
+    """[(program, argümanlar(ornekleme))] içinden PATH'te bulunan ilk kayıt komutu
+    (16 bit, tek kanal, ham PCM'i stdout'a yazar) ya da None."""
+    for ad, argumanlar in adaylar:
+        yol = shutil.which(ad)
+        if yol:
+            return [yol, *argumanlar(ornekleme)]
+    return None
+
+
 def gizli_veri(veri, coz):
     """Kullanıcıya bağlı şifreleme bu sistemde yok: anahtarlar düz kalır."""
     return None

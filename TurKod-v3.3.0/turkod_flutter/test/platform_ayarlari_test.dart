@@ -103,6 +103,23 @@ void main() {
     });
   });
 
+  test('ekran metinlerinde kısayol: macOS\'ta Cmd', () {
+    const metin = 'Ctrl+Shift+P ile Komut Paleti\'ni aç, Ctrl+R ile çalıştır.';
+    expect(kisayolluMetin(metin, Isletim.windows), metin);
+    expect(kisayolluMetin(metin, Isletim.linux), metin);
+    expect(kisayolluMetin(metin, Isletim.macos),
+        'Cmd+Shift+P ile Komut Paleti\'ni aç, Cmd+R ile çalıştır.');
+  });
+
+  test('çöp kutusu adı ve EXE özelliği', () {
+    expect(copKutusunaMetni(Isletim.windows), "Geri Dönüşüm Kutusu'na");
+    expect(copKutusunaMetni(Isletim.macos), "Çöp Kutusu'na");
+    expect(copKutusunaMetni(Isletim.linux), "Çöp'e");
+    expect(exeDonusturmeVar(Isletim.windows), isTrue);
+    expect(exeDonusturmeVar(Isletim.linux), isFalse);
+    expect(exeDonusturmeVar(Isletim.macos), isFalse);
+  });
+
   test('gömülü tarayıcı yalnızca Windows\'ta', () {
     expect(gomuluTarayiciVar(Isletim.windows), isTrue);
     expect(gomuluTarayiciVar(Isletim.linux), isFalse);

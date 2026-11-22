@@ -639,11 +639,18 @@ class AkilliDuzeltici:
                 bilgi = subprocess.STARTUPINFO()
                 bilgi.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 bilgi.wShowWindow = 0  # SW_HIDE
+            ortam = self.core._subprocess_env()
+            if bilgi is None:
+                # Linux/macOS: pencere gizleyici (Win32) yok. pygame/SDL pencereleri
+                # ekrana hiç çıkmadan, sessizce çalışır; programın hataları yine
+                # yakalanır. (Tk pencereleri bu süre boyunca kısa görünebilir.)
+                ortam.setdefault("SDL_VIDEODRIVER", "dummy")
+                ortam.setdefault("SDL_AUDIODRIVER", "dummy")
             surec = subprocess.Popen(
                 [self.python_exe, "-X", "utf8", yol], cwd=dizin,
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace", startupinfo=bilgi,
-                env=self.core._subprocess_env(), **self.core._subprocess_flags())
+                env=ortam, **self.core._subprocess_flags())
             gizleyici = _PencereGizleyici(surec.pid)
             try:
                 _, stderr = surec.communicate(timeout=sure)

@@ -117,7 +117,8 @@ def _mikrofon_parcalari(dur):
     """Mikrofondan 100 ms'lik parçalar üretir (dur olayı gelene ya da üreteç
     kapatılana dek)."""
     if not platform_katmani.windows_mu():
-        raise SesHatasi("Sesli konuşma yalnızca Windows'ta çalışır.")
+        yield from _mikrofon_parcalari_posix(dur)
+        return
     winmm = ctypes.windll.winmm
     fmt = _WAVEFORMATEX(1, 1, ORNEKLEME, ORNEKLEME * 2, 2, 16, 0)
     hwi = ctypes.c_void_p()
@@ -156,6 +157,35 @@ def _mikrofon_parcalari(dur):
         for h in basliklar:
             winmm.waveInUnprepareHeader(hwi, ctypes.byref(h), ctypes.sizeof(h))
         winmm.waveInClose(hwi)
+
+
+def _mikrofon_parcalari_posix(dur):
+    """Linux/macOS: kayıt programı (arecord, parecord, SoX) 16 kHz, 16 bit, tek
+    kanal ham sesi stdout'a yazar; 100 ms'lik parçalar halinde okunur.
+    Eskiden bu sistemlerde sesli konuşma hiç yoktu."""
+    komut = platform_katmani.mikrofon_komutu(ORNEKLEME)
+    if not komut:
+        raise SesHatasi(platform_katmani.mikrofon_yok_mesaji())
+    try:
+        surec = subprocess.Popen(komut, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+    except OSError as e:
+        raise SesHatasi(f"Mikrofon açılamadı: {e}") from e
+    boyut = int(ORNEKLEME * 2 * PARCA_SN)
+    try:
+        while dur is None or not dur.is_set():
+            veri = surec.stdout.read(boyut)
+            if not veri:
+                hata = (surec.stderr.read() or b"").decode("utf-8", "replace").strip()
+                raise SesHatasi("Mikrofon bulunamadı ya da kullanılamıyor."
+                                + (f" ({hata[:200]})" if hata else ""))
+            yield veri
+    finally:
+        try:
+            surec.terminate()
+            surec.wait(timeout=2)
+        except Exception:  # noqa: BLE001
+            surec.kill()
 
 
 def dinle(dur=None, sessizlik_sn=1.2, baslama_sn=8.0):

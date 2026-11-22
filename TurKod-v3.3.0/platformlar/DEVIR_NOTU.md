@@ -245,6 +245,27 @@ ayrı indirme dosyası gerekir. macOS'ta en kolayı yeni `.dmg`'yi indirip açma
 **Önerilen sıra:** Adım 1 → Adım 2 → önce Linux (WSL2'de AppImage, ucuz ve hataların
 çoğunu yakalar) → sonra macOS → testleri üç sistemde çalıştırma.
 
+## 4b. Üç sistem uyumluluk taraması (2026-11-22)
+
+Bütün Python ve Dart kodu sisteme bağlı kalıplar için tarandı. Düzeltilenler:
+- Gezgin'de silme Linux/macOS'ta hiç çalışmıyordu: Linux'ta freedesktop çöp kutusu
+  (`.trashinfo` ile, Dosyalar uygulaması geri yükleyebilir), macOS'ta `~/.Trash`
+  (`platform_katmani.cop_kutusuna_tasi`). Başka diskteyse kalıcı silme sorulur.
+- macOS'ta RAM 0 GB ölçülüyordu (`SC_AVPHYS_PAGES` yok): `sysctl` + `vm_stat`;
+  Linux'ta `/proc/meminfo` (MemAvailable). Yerel model önerileri buna bağlı.
+- Kodi ile sesli konuşma Linux'ta (arecord/parecord/SoX) ve macOS'ta (SoX) çalışıyor.
+- Kodi "yalnızca TürKod penceresi" görüntüsü Windows'a özgü: diğerlerinde açık mesaj
+  (bütün ekran gönderilmez).
+- Akıllı Düzelt'in arayüz denemesi Linux/macOS'ta pygame pencerelerini ekrana
+  çıkarmadan (SDL dummy) çalıştırıyor.
+- Terminal penceresi yazı tipleri Linux/macOS yazı tiplerini de deniyor.
+- EXE'ye Dönüştür Linux/macOS'ta menüden gizlendi, komut satırında açık mesaj veriyor.
+- Flutter: Gezgin silme metni sistemin çöp kutusu adıyla; karşılama ipuçları ve
+  tanıtım turu metinlerinde macOS'ta Ctrl yerine Cmd.
+Bilerek Windows'a özgü kalanlar: IDE içindeki tarayıcı (WebView2), EXE'ye Dönüştür,
+Kodi masaüstü penceresi, Win32 görünüm ayrıntıları (koyu başlık, görev çubuğu
+simgesi). Kullanıcı programı pencere simgesi (runner) yalnızca Windows'ta.
+
 ## 5. Çalışma kuralları (eski bilgisayardaki Claude hafızasından)
 
 Bunlar Claude'un eski bilgisayardaki hafızasında duruyordu. Yeni bilgisayarda
