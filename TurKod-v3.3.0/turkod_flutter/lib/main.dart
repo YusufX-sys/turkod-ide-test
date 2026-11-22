@@ -38,6 +38,33 @@ extension _CodeLineSelectionX on re.CodeLineSelection {
   bool get isValid => baseIndex >= 0 && extentIndex >= 0;
 }
 
+/// Yalnızca arayüz testleri açar: editördeki seçim/odak değişiklikleri ve
+/// menü düzenleme eylemleri zaman damgasıyla günlüğe yazılır. Kullanıcıda kapalı.
+bool editorSecimTeshisi = false;
+
+void teshisYaz(String s) {
+  if (!editorSecimTeshisi) return;
+  final z = DateTime.now().toIso8601String();
+  // ignore: avoid_print
+  print('TEŞHİS|${z.substring(11, 23)}|$s');
+}
+
+String teshisSecimi(re.CodeLineSelection s) =>
+    '(${s.baseIndex}:${s.baseOffset}-${s.extentIndex}:${s.extentOffset})';
+
+/// Kısa çağrı yığını: seçimi kimin değiştirdiğini göstermek için.
+String teshisYigini() => StackTrace.current
+    .toString()
+    .split('\n')
+    .where((l) =>
+        l.trim().isNotEmpty &&
+        !l.contains('dart:async') &&
+        !l.contains('teshisYigini') &&
+        !l.contains('change_notifier.dart'))
+    .take(18)
+    .map((l) => l.replaceAll(RegExp(r'\s+'), ' ').trim())
+    .join(' <- ');
+
 // ============================================================================
 // SABİTLER
 // ============================================================================
@@ -11288,6 +11315,11 @@ class _CodeEditorState extends State<CodeEditor> {
     // bildirimini de dinleyerek, METİN AYNI OLSA BİLE her seçim/imleç
     // değişikliğinde _ctrl'yi güncel tutuyoruz.
     _reCtrl.addListener(_onReSelectionOrTextChange);
+    _reCtrl.addListener(_secimKorumaDinle);
+    _reCtrl.addListener(_teshisSecimDinle);
+    _focus.addListener(_teshisOdakDinle);
+    HardwareKeyboard.instance.addHandler(_klavyeOlayi);
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_isaretciOlayi);
   }
 
   @override
@@ -11335,50 +11367,118 @@ class _CodeEditorState extends State<CodeEditor> {
   // imlecini gönderip seçimi sıfırlıyordu: menüden Tümünü Seç'ten sonra Kopyala ya
   // da Kopyala'dan sonra Kes yalnızca son satırı alıyordu (arayüz testlerindeki
   // teşhis: seçim menü açıkken tamdı, odak dönünce kayboluyordu). Eylemden sonraki
-  // seçim saklanır, odak verilir; sonraki kısa sürede (sıfırlama bir kareden geç
-  // gelebiliyor) metin değişmeden seçim tek imlece inerse seçim geri konur.
+  // seçim saklanır, odak verilir. Kullanıcı editörde bir tuşa basana ya da editöre
+  // tıklayana kadar (en çok 4 sn) metin değişmeden seçim tek imlece inerse seçim
+  // geri konur (sıfırlama kaç kare sonra gelirse gelsin).
+  re.CodeLineSelection? _korunanSecim;
+  String? _korunanMetin;
+  DateTime _korumaBitis = DateTime.fromMillisecondsSinceEpoch(0);
+  int _geriKoymaSayisi = 0;
+  bool _geriKoymaBekliyor = false;
+  re.CodeLineSelection? _teshisOncekiSecim;
+
+  void _korumayiBitir(String neden) {
+    if (_korunanSecim == null) return;
+    teshisYaz('koruma bitti: $neden');
+    _korunanSecim = null;
+    _korunanMetin = null;
+  }
+
   void _odaklaSecimiKoru() {
     final secim = _reCtrl.selection;
-    final metin = _reCtrl.text;
-    if (!secim.isValid || secim.isCollapsed) {
-      _focus.requestFocus();
-      return;
+    if (secim.isValid && !secim.isCollapsed) {
+      _korunanSecim = secim;
+      _korunanMetin = _reCtrl.text;
+      _korumaBitis = DateTime.now().add(const Duration(seconds: 4));
+      _geriKoymaSayisi = 0;
+      teshisYaz('koruma başladı ${teshisSecimi(secim)}');
+    } else {
+      _korumayiBitir('eylemden sonra seçim yok');
     }
-    final bitis = DateTime.now().add(const Duration(milliseconds: 700));
-    late final void Function() dinle;
-    dinle = () {
-      if (!mounted || DateTime.now().isAfter(bitis)) {
-        if (mounted) _reCtrl.removeListener(dinle);
-        return;
-      }
-      final s = _reCtrl.selection;
-      if (_reCtrl.text == metin && s.isValid && s.isCollapsed) {
-        _reCtrl.selection = secim;
-      }
-    };
-    _reCtrl.addListener(dinle);
-    Future<void>.delayed(const Duration(milliseconds: 750), () {
-      if (mounted) _reCtrl.removeListener(dinle);
-    });
     _focus.requestFocus();
   }
 
+  void _secimKorumaDinle() {
+    final k = _korunanSecim;
+    if (k == null || _geriKoymaBekliyor) return;
+    final s = _reCtrl.selection;
+    if (!s.isValid || !s.isCollapsed) return;
+    // Karar, o anki girdi olayı (tıklama/tuş) tamamen işlendikten sonra verilir:
+    // olay kullanıcıdansa koruma o arada biter ve seçim geri konmaz.
+    _geriKoymaBekliyor = true;
+    scheduleMicrotask(() {
+      _geriKoymaBekliyor = false;
+      final k2 = _korunanSecim;
+      if (!mounted || k2 == null) return;
+      if (DateTime.now().isAfter(_korumaBitis)) {
+        _korumayiBitir('süre doldu');
+        return;
+      }
+      if (_reCtrl.text != _korunanMetin) {
+        _korumayiBitir('metin değişti');
+        return;
+      }
+      final s2 = _reCtrl.selection;
+      if (!s2.isValid || !s2.isCollapsed) return;
+      if (++_geriKoymaSayisi > 5) {
+        _korumayiBitir('çok kez sıfırlandı');
+        return;
+      }
+      teshisYaz('seçim geri konuyor ${teshisSecimi(s2)} -> ${teshisSecimi(k2)}');
+      _reCtrl.selection = k2;
+    });
+  }
+
+  bool _klavyeOlayi(KeyEvent e) {
+    if (e is KeyDownEvent) _korumayiBitir('tuş ${e.logicalKey.keyLabel}');
+    return false;
+  }
+
+  void _isaretciOlayi(PointerEvent e) {
+    if (e is! PointerDownEvent || _korunanSecim == null || !mounted) return;
+    final kutu = context.findRenderObject();
+    if (kutu is RenderBox && kutu.hasSize) {
+      final yerel = kutu.globalToLocal(e.position);
+      if ((Offset.zero & kutu.size).contains(yerel)) _korumayiBitir('editöre tıklandı');
+    }
+  }
+
+  void _teshisSecimDinle() {
+    if (!editorSecimTeshisi) return;
+    final s = _reCtrl.selection;
+    final o = _teshisOncekiSecim;
+    _teshisOncekiSecim = s;
+    if (o == null || o == s) return;
+    final indi = s.isCollapsed && !o.isCollapsed;
+    teshisYaz('reCtrl seçim ${teshisSecimi(o)} -> ${teshisSecimi(s)} '
+        'odak=${_focus.hasFocus}${indi ? ' | ${teshisYigini()}' : ''}');
+  }
+
+  void _teshisOdakDinle() {
+    teshisYaz('editör odağı=${_focus.hasFocus} birincil='
+        '${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
+  }
+
   void _kes() {
+    teshisYaz('Kes çağrıldı, seçim ${teshisSecimi(_reCtrl.selection)}');
     _reCtrl.cut();
     _odaklaSecimiKoru();
   }
 
   void _kopyala() {
+    teshisYaz('Kopyala çağrıldı, seçim ${teshisSecimi(_reCtrl.selection)}');
     _reCtrl.copy();
     _odaklaSecimiKoru();
   }
 
   void _yapistir() {
+    teshisYaz('Yapıştır çağrıldı, seçim ${teshisSecimi(_reCtrl.selection)}');
     _reCtrl.paste();
     _odaklaSecimiKoru();
   }
 
   void _tumunuSec() {
+    teshisYaz('Tümünü Seç çağrıldı');
     _reCtrl.selectAll();
     _odaklaSecimiKoru();
   }
@@ -11479,6 +11579,11 @@ class _CodeEditorState extends State<CodeEditor> {
     _hScroll.removeListener(_onHScroll);
     _ctrl.removeListener(_onControllerChange);
     _reCtrl.removeListener(_onReSelectionOrTextChange);
+    _reCtrl.removeListener(_secimKorumaDinle);
+    _reCtrl.removeListener(_teshisSecimDinle);
+    _focus.removeListener(_teshisOdakDinle);
+    HardwareKeyboard.instance.removeHandler(_klavyeOlayi);
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_isaretciOlayi);
 
     _paragraphs.dispose();
     _ctrl.dispose();

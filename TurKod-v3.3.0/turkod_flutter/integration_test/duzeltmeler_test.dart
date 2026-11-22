@@ -110,31 +110,62 @@ void main() {
       await _bekle(t, const Duration(seconds: 3));
       await t.tap(find.byType(re.CodeEditor).first);
       await _bekle(t, const Duration(milliseconds: 400));
-      await _menu(t, 'Düzenle', 'Tümünü Seç');
       final c = ed.uiController!;
-      _kontrol('Menüden Tümünü Seç', c.selection.start == 0 && c.selection.end == c.text.length,
-          '${c.selection}');
-      // TEŞHİS (Linux): seçim biraz sonra da duruyor mu, odak kimde?
-      await _bekle(t, const Duration(milliseconds: 1500));
-      // ignore: avoid_print
-      print('TEŞHİS|1,5 sn sonra seçim=${c.selection} '
-          'odak=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
-      await menuyuAc(t, 'Düzenle');
-      // ignore: avoid_print
-      print('TEŞHİS|Düzenle açıkken seçim=${c.selection} '
-          'odak=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
-      await menuyuKapat(t);
-      await Clipboard.setData(const ClipboardData(text: ''));
-      await _menu(t, 'Düzenle', 'Kopyala');
-      final pano = (await Clipboard.getData('text/plain'))?.text ?? '';
-      _kontrol('Menüden Kopyala', pano == 'bir\niki\nüç\ndört', jsonEncode(pano));
-      await _menu(t, 'Düzenle', 'Kes');
-      _kontrol('Menüden Kes', ed.activeTab!.content.isEmpty,
-          'kalan=${jsonEncode(ed.activeTab!.content)}');
-      await _menu(t, 'Düzenle', 'Yapıştır');
-      await _bekle(t, const Duration(milliseconds: 500));
-      _kontrol('Menüden Yapıştır', ed.activeTab!.content == 'bir\niki\nüç\ndört',
-          jsonEncode(ed.activeTab!.content));
+
+      // TEŞHİS (tek çalıştırmada tam zaman çizelgesi): uygulama editörde seçim,
+      // odak ve menü eylemlerini; test de _ctrl seçimini, birincil odağı ve her
+      // adımı zaman damgasıyla yazar. Seçim tek imlece indiğinde çağrı yığını da
+      // yazılır: kimin sıfırladığı görünür. Günlükte "TEŞHİS|" satırları.
+      app.editorSecimTeshisi = true;
+      String odak() => '${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}';
+      void adim(String s) => app.teshisYaz('ADIM $s | ctrl seçim=${c.selection} odak=${odak()}');
+      var oncekiSecim = c.selection;
+      void ctrlIzle() {
+        final s = c.selection;
+        if (s == oncekiSecim) return;
+        final indi = s.isCollapsed && !oncekiSecim.isCollapsed;
+        app.teshisYaz('ctrl seçim $oncekiSecim -> $s metinUzunluk=${c.text.length}'
+            '${indi ? ' | ${app.teshisYigini()}' : ''}');
+        oncekiSecim = s;
+      }
+      void odakIzle() => app.teshisYaz('birincil odak=${odak()}');
+      c.addListener(ctrlIzle);
+      FocusManager.instance.addListener(odakIzle);
+      Future<void> teshisliMenu(String oge) async {
+        adim('$oge: menü açılmadan önce');
+        await menuyuAc(t, 'Düzenle');
+        adim('$oge: Düzenle açık');
+        await t.tap(find.text(oge).last);
+        adim('$oge: öğeye tıklandı');
+        var toplam = 0;
+        for (final ms in [100, 200, 400, 800]) {
+          await _bekle(t, Duration(milliseconds: ms));
+          toplam += ms;
+          adim('$oge: tıklamadan ~$toplam ms sonra');
+        }
+      }
+
+      try {
+        await teshisliMenu('Tümünü Seç');
+        _kontrol('Menüden Tümünü Seç', c.selection.start == 0 && c.selection.end == c.text.length,
+            '${c.selection}');
+        await Clipboard.setData(const ClipboardData(text: ''));
+        await teshisliMenu('Kopyala');
+        final pano = (await Clipboard.getData('text/plain'))?.text ?? '';
+        _kontrol('Menüden Kopyala', pano == 'bir\niki\nüç\ndört', jsonEncode(pano));
+        await teshisliMenu('Kes');
+        final kesPano = (await Clipboard.getData('text/plain'))?.text ?? '';
+        adim('Kes sonrası içerik=${jsonEncode(ed.activeTab!.content)} pano=${jsonEncode(kesPano)}');
+        _kontrol('Menüden Kes', ed.activeTab!.content.isEmpty,
+            'kalan=${jsonEncode(ed.activeTab!.content)}');
+        await teshisliMenu('Yapıştır');
+        _kontrol('Menüden Yapıştır', ed.activeTab!.content == 'bir\niki\nüç\ndört',
+            jsonEncode(ed.activeTab!.content));
+      } finally {
+        c.removeListener(ctrlIzle);
+        FocusManager.instance.removeListener(odakIzle);
+        app.editorSecimTeshisi = false;
+      }
 
       // --- Ctrl+G Satıra Git
       await t.tap(find.byType(re.CodeEditor).first);
