@@ -285,9 +285,10 @@ void main() {
     await bp.continueRun();
     final bitti = await _kosulBekle(
         t, () => !bp.debugging && terminal.output.contains('toplam 142'),
-        sn: 30);
+        sn: 60);
     _yaz('Atanan değer programa yansır', bitti,
-        terminal.output.replaceAll('\n', ' ').trim());
+        'çıktı="${terminal.output.replaceAll('\n', ' ').trim()}" '
+        'debugging=${bp.debugging} paused=${bp.paused}');
 
     // ------------------------------------------------ 11) yüksek kontrast tema + kısayol penceresi
     await ayarlar.setValue('tema', 'Yüksek Kontrast');

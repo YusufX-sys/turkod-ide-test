@@ -11436,6 +11436,8 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _isaretciOlayi(PointerEvent e) {
     if (e is! PointerDownEvent || _korunanSecim == null || !mounted) return;
+    // Editörün üstünde açık bir menü/pencere varken tıklama ona gider, editöre değil.
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     final kutu = context.findRenderObject();
     if (kutu is RenderBox && kutu.hasSize) {
       final yerel = kutu.globalToLocal(e.position);
