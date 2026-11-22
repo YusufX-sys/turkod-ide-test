@@ -163,6 +163,11 @@ dökümü gelmez, ama işin özü bu notta.
   sonra yeniden) ve teste `TEŞHİS|` satırları eklendi (1,5 sn sonra ve Düzenle
   açıkken seçim/odak). Bir sonraki turun TEŞHİS satırları varsayımı doğrular ya da
   çürütür.
+  `arayuz-linux` (#14): 63 geçti, 2 kaldı. TEŞHİS: seçim 1,5 sn sonra ve menü açıkken
+  TAM; Kopyala artık geçiyor; Kes son satırı kesiyor → kök neden kesin: Linux'ta
+  editöre odak GERİ VERİLİNCE seçim sıfırlanıyor (Kopyala'nın requestFocus'u).
+  Düzeltme: `_odaklaSecimiKoru` (eylem sonrası seçimi sakla, odak ver, metin
+  değişmediyse bir kare sonra geri koy) dört düzenleme eyleminde. CI'da denenecek.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o

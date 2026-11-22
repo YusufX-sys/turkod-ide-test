@@ -11330,30 +11330,41 @@ class _CodeEditorState extends State<CodeEditor> {
     ed.cokluImlec = _cokluImlecKomutu;
   }
 
+  // Menü / komut paletinden gelen düzenleme eylemleri bitince odak editöre geri
+  // verilir. Linux'ta odak geri gelince platformun metin girişi editöre kendi
+  // imlecini gönderip seçimi sıfırlıyordu: menüden Tümünü Seç'ten sonra Kopyala ya
+  // da Kopyala'dan sonra Kes yalnızca son satırı alıyordu (arayüz testlerindeki
+  // teşhis: seçim menü açıkken tamdı, odak dönünce kayboluyordu). Eylemden sonraki
+  // seçim saklanır, odak verilir, metin değişmediyse seçim bir kare sonra geri konur.
+  void _odaklaSecimiKoru() {
+    final secim = _reCtrl.selection;
+    final metin = _reCtrl.text;
+    _focus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _reCtrl.text == metin && _reCtrl.selection != secim) {
+        _reCtrl.selection = secim;
+      }
+    });
+  }
+
   void _kes() {
     _reCtrl.cut();
-    _focus.requestFocus();
+    _odaklaSecimiKoru();
   }
 
   void _kopyala() {
     _reCtrl.copy();
-    _focus.requestFocus();
+    _odaklaSecimiKoru();
   }
 
   void _yapistir() {
     _reCtrl.paste();
-    _focus.requestFocus();
+    _odaklaSecimiKoru();
   }
 
   void _tumunuSec() {
-    // Önce odak, sonra seçim: odak kazanılınca platformun metin girişi (Linux)
-    // editöre kendi imlecini geri gönderip seçimi sıfırlayabiliyor; seçim bir kare
-    // sonra yeniden uygulanır. (Menüden Kopyala Linux'ta yalnızca son satırı alıyordu.)
-    _focus.requestFocus();
     _reCtrl.selectAll();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _reCtrl.selectAll();
-    });
+    _odaklaSecimiKoru();
   }
 
   // Menü / komut paletinden geri al / yinele (Ctrl+Z / Ctrl+Y editörün
