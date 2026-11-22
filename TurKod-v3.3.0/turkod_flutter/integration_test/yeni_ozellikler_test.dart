@@ -292,13 +292,13 @@ void main() {
     // ------------------------------------------------ 11) yüksek kontrast tema + kısayol penceresi
     await ayarlar.setValue('tema', 'Yüksek Kontrast');
     await _bekle(t, const Duration(seconds: 1));
-    final tema = Theme.of(t.element(find.text('Dosya').first));
-    _yaz('Yüksek Kontrast teması', tema.colorScheme.surface == Colors.black,
-        '${tema.colorScheme.surface}');
+    // Tema değişimi yavaş makinede 1 saniyeden uzun sürebilir: uygulanması beklenir.
+    Color yuzey() => Theme.of(t.element(find.text('Dosya').first)).colorScheme.surface;
+    final siyah = await _kosulBekle(t, () => yuzey() == Colors.black, sn: 10);
+    _yaz('Yüksek Kontrast teması', siyah, '${yuzey()}');
     await _ekran('11_yuksek_kontrast');
     await ayarlar.setValue('tema', 'Modern Koyu');
-    await t.tap(find.text('Görünüm').first);
-    await _bekle(t, const Duration(milliseconds: 600));
+    await menuyuAc(t, 'Görünüm');
     await t.tap(find.text('Klavye Kısayolları…').last);
     final kisayol = await _kosulBekle(t,
         () => find.text('Klavye Kısayolları').evaluate().isNotEmpty, sn: 5);
@@ -314,8 +314,7 @@ void main() {
     // Flutter "used after being disposed" istisnası verir ve test düşer.
     await ed.createUntitled(content: 'yazdır("argüman")');
     await _bekle(t, const Duration(seconds: 1));
-    await t.tap(find.text('Çalıştır').first);
-    await _bekle(t, const Duration(milliseconds: 600));
+    await menuyuAc(t, 'Çalıştır');
     await t.tap(find.text('Çalıştırma Argümanları…').last);
     await _bekle(t, const Duration(milliseconds: 800));
     await t.enterText(find.byType(TextField).last, 'veri.txt --ayrintili');

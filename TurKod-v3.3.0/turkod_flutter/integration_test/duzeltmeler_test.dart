@@ -82,6 +82,12 @@ void main() {
     final dosya1 = File(p.join(ev, 'kaydedilmemis.trpy'));
     final dosya2 = File(p.join(ev, 'kaydedilmis.trpy'));
 
+    // İlk açılıştaki tanıtım turu menü çubuğunu kaplar (Linux'ta testler bu yüzden
+    // menülere tıklayamıyordu): tur görülmüş sayılır.
+    final ayarDosyasi = File(p.join(ev, '.turkod_ayarlar.json'));
+    if (!ayarDosyasi.existsSync()) {
+      ayarDosyasi.writeAsStringSync(jsonEncode({'arayuz_turu_goruldu': true}));
+    }
     app.main(const []);
     expect(await _bulanaKadar(t, find.text('Dosya'), sn: 90), isTrue);
     await _bekle(t, const Duration(seconds: 3));

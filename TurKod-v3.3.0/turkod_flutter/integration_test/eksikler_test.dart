@@ -80,6 +80,12 @@ void main() {
           'Gerçek ayarlar/oturum bozulmasın diye test çalıştırılmadı.');
     }
 
+    // İlk açılıştaki tanıtım turu menü çubuğunu kaplar (Linux'ta testler bu yüzden
+    // menülere tıklayamıyordu): tur görülmüş sayılır.
+    final turAyari = File(p.join(ev, '.turkod_ayarlar.json'));
+    if (!turAyari.existsSync()) {
+      turAyari.writeAsStringSync(jsonEncode({'arayuz_turu_goruldu': true}));
+    }
     app.main(const []);
     expect(await _bulanaKadar(t, find.text('Dosya'), sn: 90), isTrue,
         reason: 'Ana pencere açılmadı');
@@ -116,8 +122,7 @@ void main() {
     }
 
     // --- 2) Hakkında penceresinde sürüm numarası
-    await t.tap(find.text('Yardım').first);
-    await _bekle(t, const Duration(milliseconds: 600));
+    await menuyuAc(t, 'Yardım');
     await t.tap(find.text('Hakkında / İmza').last);
     await _bulanaKadar(t, find.byType(AlertDialog), sn: 15);
     await _bekle(t, const Duration(seconds: 3)); // imza doğrulaması
@@ -197,8 +202,7 @@ void main() {
         'oturumdaki sekme sayısı: ${(ayar['son_oturum'] as List?)?.length ?? 0}');
 
     // --- 5) Ayarlar: varsayılana sıfırlama
-    await t.tap(find.text('Görünüm').first);
-    await _bekle(t, const Duration(milliseconds: 600));
+    await menuyuAc(t, 'Görünüm');
     await t.tap(find.text('Ayarlar').last);
     await _bekle(t, const Duration(seconds: 2));
     final ayarMetin = _metinler(find.byType(Scaffold).first).join(' | ');
@@ -206,8 +210,7 @@ void main() {
         !RegExp('Sıfırla|Varsayılan').hasMatch(ayarMetin), '');
 
     // --- 6) Lisanslar penceresi (yeni)
-    await t.tap(find.text('Yardım').first);
-    await _bekle(t, const Duration(milliseconds: 600));
+    await menuyuAc(t, 'Yardım');
     await t.tap(find.text('Lisanslar').last);
     await _bulanaKadar(t, find.byType(AlertDialog), sn: 10);
     final lis = _metinler(find.byType(AlertDialog)).join(' ');

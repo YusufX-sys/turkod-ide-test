@@ -141,6 +141,10 @@ dökümü gelmez, ama işin özü bu notta.
   `arayuz-windows` (#9): 5'in 4'ü yeşil, 65 madde geçti, 0 kaldı. Son düşen
   (eksikler): Ayarlar sayfasının üst satırı dar alanda 5 px taşıyordu (gerçek hata,
   3.3'te de vardı; düğmeler artık küçülüyor, sürüm notlarına girdi).
+  `arayuz-linux` (#10): Türkçe çeviri yeşil; 37 geçti, 10 kaldı. Sebep: ilk açılıştaki
+  tanıtım turu menü çubuğunu kaplıyordu (testler artık turu görülmüş sayıyor) ve bazı
+  menüler eski "tıkla + 600 ms" yöntemiyle açılıyordu (hepsi `menuyuAc`); tema
+  değişimi beklenerek denetleniyor.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
