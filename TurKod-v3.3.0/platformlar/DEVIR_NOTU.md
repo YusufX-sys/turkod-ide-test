@@ -168,6 +168,22 @@ dökümü gelmez, ama işin özü bu notta.
   editöre odak GERİ VERİLİNCE seçim sıfırlanıyor (Kopyala'nın requestFocus'u).
   Düzeltme: `_odaklaSecimiKoru` (eylem sonrası seçimi sakla, odak ver, metin
   değişmediyse bir kare sonra geri koy) dört düzenleme eyleminde. CI'da denenecek.
+  `arayuz-linux` (#15, #16): bir kare / 0,7 sn geri koyma yetmedi (Kes ve Yapıştır kaldı).
+  `arayuz-linux` (#17): koruma, kullanıcı tuşa basana / editöre tıklayana kadar (en çok
+  4 sn) sürecek biçimde yeniden yazıldı; testte `app.editorSecimTeshisi` ile tam zaman
+  çizelgesi (seçim, odak, çağrı yığını). Kes/Yapıştır GEÇTİ, bu turda sıfırlama hiç
+  görülmedi (kesin kök neden yakalanmadı; koruma yerinde). Menü tıklaması korumayı
+  erken bitiriyordu → editör üstünde menü açıkken tıklamalar sayılmıyor. Hata ayıklayıcı
+  "Atanan değer" maddesi yavaş CI'da süre aşımıydı → bekleme 60 sn.
+  `arayuz-linux` (#18, 2026-11-22): TAMAMEN YEŞİL. Sırada: `arayuz-windows` (Ayarlar
+  taşma düzeltmesini doğrulamak için) ve ilk kez `arayuz-macos`.
+  `arayuz-windows` (#19): TAMAMEN YEŞİL. `arayuz-macos` (#20, ilk kez): 3 test düştü.
+  (1) eksikler: Satıra Git penceresi Esc ile kapanmadı, perdesi Görünüm menüsüne
+  tıklamayı engelledi → testte `_pencereyiKapat` (Esc, olmazsa Vazgeç; TEŞHİS satırı
+  yazar). (2-3) çeviri ve yeni özellikler maddelerin hepsi geçti ama terminal başlığı
+  dar panelde (322 px) 22 px taşıyordu (gerçek hata, her sistemde) → 440 px altında
+  yakınlaştırma/kopyalama/ayrı pencere "⋯ Diğer" menüsünde. Kitap s.94 ve
+  kodi_kilavuz.py güncellendi (manifest yeniden imzalanmalı); sürüm notlarına eklendi.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o

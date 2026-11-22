@@ -14556,6 +14556,28 @@ class _TerminalPanelState extends State<TerminalPanel> {
           // Dar panelde yazılı düğmeler yalnızca simgeye döner (taşma olmaz).
           child: LayoutBuilder(builder: (_, baslikKisit) {
             final genis = baslikKisit.maxWidth >= 660;
+            // Dar panelde (ör. terminal yan bölgede) yakınlaştırma, kopyalama ve ayrı
+            // pencere düğmeleri "Diğer" menüsüne geçer; eskiden başlık taşıyordu.
+            final dar = baslikKisit.maxWidth < 440;
+            void kabukPenceresi() => context
+                    .read<BackendService>()
+                    .call('kabuk_penceresi')
+                    .then((r) {
+                  if (r['ok'] != true && context.mounted) {
+                    showAppSnackbar(context, 'Kabuk penceresi açılamadı.',
+                        kind: SnackKind.error);
+                  }
+                }).catchError((Object e) {
+                  if (context.mounted) {
+                    showAppSnackbar(context, 'Kabuk penceresi açılamadı: $e',
+                        kind: SnackKind.error);
+                  }
+                });
+            void ciktiyiKopyala() {
+              Clipboard.setData(ClipboardData(text: term.output));
+              showAppSnackbar(context, 'Terminal çıktısı kopyalandı',
+                  kind: SnackKind.success);
+            }
             return Row(children: [
             Icon(Icons.terminal_rounded,
                 size: 15, color: theme.colorScheme.primary),
@@ -14619,28 +14641,14 @@ class _TerminalPanelState extends State<TerminalPanel> {
                         onPressed: kabukAc,
                       );
               }(),
-            IconButton(
-              tooltip: 'TürKod Kabuğu\'nu ayrı pencerede aç',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.open_in_new, size: 14),
-              // Eskiden hata yutuluyordu: pencere açılmazsa hiçbir şey olmuyordu.
-              onPressed: conn
-                  ? () => context
-                          .read<BackendService>()
-                          .call('kabuk_penceresi')
-                          .then((r) {
-                        if (r['ok'] != true && context.mounted) {
-                          showAppSnackbar(context, 'Kabuk penceresi açılamadı.',
-                              kind: SnackKind.error);
-                        }
-                      }).catchError((Object e) {
-                        if (context.mounted) {
-                          showAppSnackbar(context, 'Kabuk penceresi açılamadı: $e',
-                              kind: SnackKind.error);
-                        }
-                      })
-                  : null,
-            ),
+            if (!dar)
+              IconButton(
+                tooltip: 'TürKod Kabuğu\'nu ayrı pencerede aç',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.open_in_new, size: 14),
+                // Eskiden hata yutuluyordu: pencere açılmazsa hiçbir şey olmuyordu.
+                onPressed: conn ? kabukPenceresi : null,
+              ),
             // Dar panelde yalnızca simge kalır; eskiden başlık taşıyor, sağdaki
             // kapat düğmesi kesiliyordu.
             if (term.sonHata != null && !term.isRunning)
@@ -14671,30 +14679,59 @@ class _TerminalPanelState extends State<TerminalPanel> {
                         onPressed: aiIleAcikla,
                       );
               }(),
-            IconButton(
-              tooltip: 'Yazıyı Küçült (Ctrl+Tekerlek)',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.zoom_out_rounded, size: 16),
-              onPressed: () => _zoomTerminal(context, -1),
-            ),
-            IconButton(
-              tooltip: 'Yazıyı Büyüt (Ctrl+Tekerlek)',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.zoom_in_rounded, size: 16),
-              onPressed: () => _zoomTerminal(context, 1),
-            ),
-            IconButton(
-              tooltip: 'Tüm çıktıyı kopyala',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.copy_all_rounded, size: 16),
-              onPressed: term.output.isEmpty
-                  ? null
-                  : () {
-                      Clipboard.setData(ClipboardData(text: term.output));
-                      showAppSnackbar(context, 'Terminal çıktısı kopyalandı',
-                          kind: SnackKind.success);
-                    },
-            ),
+            if (!dar) ...[
+              IconButton(
+                tooltip: 'Yazıyı Küçült (Ctrl+Tekerlek)',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.zoom_out_rounded, size: 16),
+                onPressed: () => _zoomTerminal(context, -1),
+              ),
+              IconButton(
+                tooltip: 'Yazıyı Büyüt (Ctrl+Tekerlek)',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.zoom_in_rounded, size: 16),
+                onPressed: () => _zoomTerminal(context, 1),
+              ),
+              IconButton(
+                tooltip: 'Tüm çıktıyı kopyala',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.copy_all_rounded, size: 16),
+                onPressed: term.output.isEmpty ? null : ciktiyiKopyala,
+              ),
+            ] else
+              PopupMenuButton<String>(
+                tooltip: 'Diğer',
+                icon: const Icon(Icons.more_horiz_rounded, size: 16),
+                style: IconButton.styleFrom(visualDensity: VisualDensity.compact),
+                onSelected: (k) {
+                  switch (k) {
+                    case 'kucult':
+                      _zoomTerminal(context, -1);
+                    case 'buyut':
+                      _zoomTerminal(context, 1);
+                    case 'kopyala':
+                      ciktiyiKopyala();
+                    case 'pencere':
+                      kabukPenceresi();
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'kucult', height: 34, child: Text('Yazıyı Küçült')),
+                  const PopupMenuItem(
+                      value: 'buyut', height: 34, child: Text('Yazıyı Büyüt')),
+                  PopupMenuItem(
+                      value: 'kopyala',
+                      height: 34,
+                      enabled: term.output.isNotEmpty,
+                      child: const Text('Tüm çıktıyı kopyala')),
+                  PopupMenuItem(
+                      value: 'pencere',
+                      height: 34,
+                      enabled: conn,
+                      child: const Text('TürKod Kabuğu\'nu ayrı pencerede aç')),
+                ],
+              ),
             IconButton(
               tooltip: 'Temizle',
               visualDensity: VisualDensity.compact,

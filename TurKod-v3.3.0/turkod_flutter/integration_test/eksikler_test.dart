@@ -70,6 +70,30 @@ Future<void> _kisayol(WidgetTester t, LogicalKeyboardKey tus,
   await _bekle(t, const Duration(milliseconds: 700));
 }
 
+/// Açık pencereyi kapatır: önce Esc; kapanmazsa (macOS CI'da Satıra Git penceresi
+/// Esc ile kapanmadı, arkasındaki perde menüye tıklamayı engelledi) Vazgeç/İptal/
+/// Kapat düğmesi. Esc'in işe yarayıp yaramadığı günlüğe yazılır.
+Future<void> _pencereyiKapat(WidgetTester t, String ad) async {
+  if (find.byType(AlertDialog).evaluate().isEmpty) return;
+  await t.sendKeyEvent(LogicalKeyboardKey.escape);
+  await _bekle(t, const Duration(milliseconds: 600));
+  if (find.byType(AlertDialog).evaluate().isEmpty) return;
+  // ignore: avoid_print
+  print('TEŞHİS|$ad penceresi Esc ile kapanmadı; düğmeyle kapatılıyor');
+  for (final d in ['Vazgeç', 'İptal', 'Kapat', 'Hayır']) {
+    final f = find.descendant(of: find.byType(AlertDialog).last, matching: find.text(d));
+    if (f.evaluate().isNotEmpty) {
+      await t.tap(f.last);
+      await _bekle(t, const Duration(milliseconds: 600));
+      break;
+    }
+  }
+  if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+    // ignore: avoid_print
+    print('TEŞHİS|$ad penceresi düğmeyle de kapanmadı');
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -156,10 +180,7 @@ void main() {
     final soru = find.byType(AlertDialog).evaluate().isNotEmpty;
     _yaz('Ctrl+W ile sekme kapatma', ed.tabs.length == sekmeOnce && !soru,
         'sekme: $sekmeOnce -> ${ed.tabs.length}${soru ? " (kaydet sorusu açıldı)" : ""}');
-    if (soru) {
-      await t.sendKeyEvent(LogicalKeyboardKey.escape);
-      await _bekle(t, const Duration(milliseconds: 400));
-    }
+    if (soru) await _pencereyiKapat(t, 'Kaydet sorusu');
 
     // Ctrl+W sekmeyi kapattıysa (4.0'da kapatır) editör kalmamıştır: yenisi açılır.
     if (find.byType(re.CodeEditor).evaluate().isEmpty) {
@@ -172,10 +193,7 @@ void main() {
         find.textContaining('Satır').evaluate().length > 3;
     _yaz('Ctrl+G ile satıra git', !find.byType(AlertDialog).evaluate().isNotEmpty,
         satiraGit ? 'pencere açıldı' : 'hiçbir şey olmadı');
-    if (find.byType(AlertDialog).evaluate().isNotEmpty) {
-      await t.sendKeyEvent(LogicalKeyboardKey.escape);
-      await _bekle(t, const Duration(milliseconds: 400));
-    }
+    await _pencereyiKapat(t, 'Satıra Git');
 
     // --- 4) Çökme / elektrik kesintisi: kaydedilmemiş değişiklikler nerede?
     final dosya = File(p.join(ev, 'odev.trpy'))..writeAsStringSync('yazdır("eski")\n');

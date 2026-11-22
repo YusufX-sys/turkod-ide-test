@@ -697,6 +697,8 @@ SAYFALAR = [
             ["Yazıyı Küçült / Büyüt", "Terminal yazısını 8-28 arasında küçültür ya da büyütür (Ctrl+tekerlek de olur)."],
             ["Tüm çıktıyı kopyala", "Terminaldeki bütün yazıyı panoya alır."],
             ["Temizle / Kapat", "Terminali temizler / saklar."],
+            ["⋯ (Diğer)", "Terminal dar bir yerdeyse çıkar: Yazıyı Küçült / Büyüt, Tüm çıktıyı kopyala "
+                          "ve ayrı pencere düğmeleri bunun içine girer."],
         ], [1.4, 3]),
         ("baslik", "Alttaki yazma satırı"),
         ("maddeler", [
