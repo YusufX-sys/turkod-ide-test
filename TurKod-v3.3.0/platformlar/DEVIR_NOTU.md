@@ -153,6 +153,10 @@ dökümü gelmez, ama işin özü bu notta.
   kurulamadı (çözülmedi; yeni bir Codespace ya da yeniden oluşturma gerekebilir).
   Test daha sabırlı yapıldı (yeni sekmeden sonra 3 sn, Kapat'tan önce 800 ms, sonra
   sekme kapanana dek bekleme); hâlâ kalırsa gerçek Linux hatası sayılmalı.
+  `arayuz-linux` (#12): 62 geçti, 3 kaldı. Ctrl+W zamanlamaymış (geçti). Menüden
+  Kopyala/Kes/Yapıştır beklemeye rağmen kaldı → gerçek Linux davranışı sayıldı:
+  editör odak kaybederken seçim saklanıyor, menüden Kopyala/Kes metin değişmediyse
+  geri yüklüyor (`_odakDegisti`, `_secimiGeriYukle`). CI'da henüz doğrulanmadı.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o

@@ -11272,7 +11272,7 @@ class _CodeEditorState extends State<CodeEditor> {
       verticalScroller: _textScroll,
       horizontalScroller: _hScroll,
     );
-    _focus = FocusNode(onKeyEvent: _handleKeyEvent);
+    _focus = FocusNode(onKeyEvent: _handleKeyEvent)..addListener(_odakDegisti);
     _textScroll.addListener(_onTextScroll);
     _hScroll.addListener(_onHScroll);
     _ctrl.addListener(_onControllerChange);
@@ -11327,12 +11327,36 @@ class _CodeEditorState extends State<CodeEditor> {
     ed.cokluImlec = _cokluImlecKomutu;
   }
 
+  // Menüden Kopyala / Kes: menü açılınca editör odağı kaybeder. Linux'ta odak geri
+  // dönerken seçim sıfırlanıyor, Kopyala yalnızca imlecin satırını alıyordu
+  // (arayüz testinde bulundu). Odak kaybolurken seçim saklanır; metin değişmeden
+  // seçim kaybolmuşsa menü eylemi onu geri yükler.
+  re.CodeLineSelection? _odaksizSecim;
+  String? _odaksizMetin;
+
+  void _odakDegisti() {
+    if (_focus.hasFocus) return;
+    final s = _reCtrl.selection;
+    _odaksizSecim = s.isValid && !s.isCollapsed ? s : null;
+    _odaksizMetin = _odaksizSecim == null ? null : _reCtrl.text;
+  }
+
+  void _secimiGeriYukle() {
+    final s = _odaksizSecim;
+    if (s != null && _reCtrl.selection.isCollapsed && _reCtrl.text == _odaksizMetin) {
+      _reCtrl.selection = s;
+    }
+    _odaksizSecim = null;
+  }
+
   void _kes() {
+    _secimiGeriYukle();
     _reCtrl.cut();
     _focus.requestFocus();
   }
 
   void _kopyala() {
+    _secimiGeriYukle();
     _reCtrl.copy();
     _focus.requestFocus();
   }
