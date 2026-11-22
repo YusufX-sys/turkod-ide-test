@@ -138,6 +138,9 @@ dökümü gelmez, ama işin özü bu notta.
   `menuyuAc`/`menuyuKapat` artık menünün gerçekten açılıp kapanmasını bekliyor),
   (3) Ctrl+W artık sekmeyi kapattığı için eksikler testinde editör kalmaması,
   (4) "Hatayı AI ile açıkla" dar panelde yalnızca simge (ipucu metniyle aranıyor).
+  `arayuz-windows` (#9): 5'in 4'ü yeşil, 65 madde geçti, 0 kaldı. Son düşen
+  (eksikler): Ayarlar sayfasının üst satırı dar alanda 5 px taşıyordu (gerçek hata,
+  3.3'te de vardı; düğmeler artık küçülüyor, sürüm notlarına girdi).
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o

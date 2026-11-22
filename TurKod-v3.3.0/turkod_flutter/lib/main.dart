@@ -16424,25 +16424,37 @@ class _SettingsPageState extends State<SettingsPage> {
             Text('Ayarlar',
                 style: theme.textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700)),
-            const Spacer(),
-            OutlinedButton(
-              onPressed: _updatingModels ? null : _updateModels,
-              child: _updatingModels
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Modelleri Güncelle'),
-            ),
             const SizedBox(width: 8),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Kaydet ve Uygula'),
+            // Dar alanda (yan paneller açıkken) düğmeler sağa taşıp kesiliyordu:
+            // artık sığmazlarsa birlikte küçülürler.
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    OutlinedButton(
+                      onPressed: _updatingModels ? null : _updateModels,
+                      child: _updatingModels
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Modelleri Güncelle'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Kaydet ve Uygula'),
+                    ),
+                  ]),
+                ),
+              ),
             ),
           ]),
         ),
