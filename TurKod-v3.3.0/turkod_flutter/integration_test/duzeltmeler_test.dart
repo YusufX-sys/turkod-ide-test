@@ -114,6 +114,16 @@ void main() {
       final c = ed.uiController!;
       _kontrol('Menüden Tümünü Seç', c.selection.start == 0 && c.selection.end == c.text.length,
           '${c.selection}');
+      // TEŞHİS (Linux): seçim biraz sonra da duruyor mu, odak kimde?
+      await _bekle(t, const Duration(milliseconds: 1500));
+      // ignore: avoid_print
+      print('TEŞHİS|1,5 sn sonra seçim=${c.selection} '
+          'odak=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
+      await menuyuAc(t, 'Düzenle');
+      // ignore: avoid_print
+      print('TEŞHİS|Düzenle açıkken seçim=${c.selection} '
+          'odak=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
+      await menuyuKapat(t);
       await Clipboard.setData(const ClipboardData(text: ''));
       await _menu(t, 'Düzenle', 'Kopyala');
       final pano = (await Clipboard.getData('text/plain'))?.text ?? '';

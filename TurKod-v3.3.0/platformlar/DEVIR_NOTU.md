@@ -157,6 +157,12 @@ dökümü gelmez, ama işin özü bu notta.
   Kopyala/Kes/Yapıştır beklemeye rağmen kaldı → gerçek Linux davranışı sayıldı:
   editör odak kaybederken seçim saklanıyor, menüden Kopyala/Kes metin değişmediyse
   geri yüklüyor (`_odakDegisti`, `_secimiGeriYukle`). CI'da henüz doğrulanmadı.
+  `arayuz-linux` (#13): bu düzeltme İŞE YARAMADI (aynı 3 madde), geri alındı. Yeni
+  varsayım: `_tumunuSec` seçimden SONRA odak istiyor; Linux'ta odak gelince metin
+  girişi seçimi sıfırlıyor olabilir. Sıra değişti (önce odak, sonra seçim + bir kare
+  sonra yeniden) ve teste `TEŞHİS|` satırları eklendi (1,5 sn sonra ve Düzenle
+  açıkken seçim/odak). Bir sonraki turun TEŞHİS satırları varsayımı doğrular ya da
+  çürütür.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
