@@ -105,7 +105,9 @@ void main() {
 
       // --- Düzenle menüsünden Tümünü Seç / Kopyala / Kes / Yapıştır
       await ed.createUntitled(content: 'bir\niki\nüç\ndört');
-      await _bekle(t, const Duration(seconds: 1));
+      // Yeni sekmenin editörü yerleşsin: yavaş makinede (Linux CI) geç gelen içerik
+      // eşitlemesi seçimi sıfırlıyor, Kopyala yalnızca son satırı alıyordu.
+      await _bekle(t, const Duration(seconds: 3));
       await t.tap(find.byType(re.CodeEditor).first);
       await _bekle(t, const Duration(milliseconds: 400));
       await _menu(t, 'Düzenle', 'Tümünü Seç');
@@ -153,8 +155,13 @@ void main() {
       _kontrol('Ctrl+W kaydedilmemiş sekmede "kaydedilmemiş" diye sorar', soru.evaluate().isNotEmpty);
       final once = ed.tabs.length;
       if (soru.evaluate().isNotEmpty) {
+        // Açılış animasyonu bitmeden basılan düğme yavaş makinede kaçıyordu.
+        await _bekle(t, const Duration(milliseconds: 800));
         await t.tap(find.descendant(of: soru, matching: find.widgetWithText(TextButton, 'Kapat')));
-        await _bekle(t, const Duration(seconds: 1));
+        final son = DateTime.now().add(const Duration(seconds: 5));
+        while (ed.tabs.length == once && DateTime.now().isBefore(son)) {
+          await _bekle(t, const Duration(milliseconds: 200));
+        }
       }
       _kontrol('Ctrl+W sekmeyi kapatır', ed.tabs.length == once - 1, 'sekme: $once -> ${ed.tabs.length}');
 

@@ -145,6 +145,14 @@ dökümü gelmez, ama işin özü bu notta.
   tanıtım turu menü çubuğunu kaplıyordu (testler artık turu görülmüş sayıyor) ve bazı
   menüler eski "tıkla + 600 ms" yöntemiyle açılıyordu (hepsi `menuyuAc`); tema
   değişimi beklenerek denetleniyor.
+  `arayuz-linux` (#11): 5 testin 5'i çöküşsüz bitti, 61 geçti, 4 kaldı (yalnızca
+  Linux'ta): menüden Tümünü Seç'ten sonra Kopyala/Kes seçimi kaybediyor (yalnızca son
+  satırı kopyalıyor) ve Ctrl+W'deki "kaydedilmemiş" sorusunda Kapat sekmeyi kapatmıyor.
+  Gerçek Linux hatası mı test zamanlaması mı henüz belli değil. Codespace'te elle
+  denenemedi: Codespace durdurulup yeniden açılınca masaüstü bağlantısı (noVNC)
+  kurulamadı (çözülmedi; yeni bir Codespace ya da yeniden oluşturma gerekebilir).
+  Test daha sabırlı yapıldı (yeni sekmeden sonra 3 sn, Kapat'tan önce 800 ms, sonra
+  sekme kapanana dek bekleme); hâlâ kalırsa gerçek Linux hatası sayılmalı.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
