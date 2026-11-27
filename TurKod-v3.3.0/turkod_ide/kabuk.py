@@ -505,10 +505,19 @@ class TurKodKabugu:
 
     @staticmethod
     def _parcala(arg):
+        """Komutun parçaları. Windows'ta komut satırı kuralıyla (çift tırnak;
+        ters eğik çizgi yol ayırıcıdır), Linux/macOS'ta kabuk kuralıyla (tek
+        ve çift tırnak, \\ kaçış). EXE panelinin gösterdiği komut
+        (exe_donusturucu._tirnak, orada shlex.quote) aynen yazılabilsin:
+        eskiden Linux/macOS'ta tek tırnaklar ada karışıyor, program
+        'Uzay Oyunu' (tırnaklarıyla) adını alıyordu."""
+        posix = not platform_katmani.windows_mu()
         try:
-            parca = shlex.split(arg, posix=False)
+            parca = shlex.split(arg, posix=posix)
         except ValueError:
             parca = arg.split()
+        if posix:
+            return parca
         return [p[1:-1] if len(p) > 1 and p[0] == p[-1] == '"' else p for p in parca]
 
     def _k_exe_yap(self, arg):

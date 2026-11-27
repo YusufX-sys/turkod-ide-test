@@ -547,15 +547,20 @@ class CudaMotorTestleri(unittest.TestCase):
         self.assertGreater(self.ym.MOTOR_BOYUTU_MB["cu124"], 600)
 
     def test_dll_klasorleri_bulunur(self):
-        bin_dizini = os.path.join(self.dizin, "nvidia", "cublas", "bin")
+        # Windows'ta nvidia/*/bin/*.dll ve Toolkit'in bin'i; Linux/macOS'ta
+        # nvidia/*/lib/*.so* ve Toolkit'in lib64'ü.
+        windows = os.name == "nt"
+        bin_dizini = os.path.join(self.dizin, "nvidia", "cublas", "bin" if windows else "lib")
         os.makedirs(bin_dizini)
-        open(os.path.join(bin_dizini, "cublas64_12.dll"), "wb").close()
+        open(os.path.join(bin_dizini, "cublas64_12.dll" if windows else "libcublas.so.12"),
+             "wb").close()
         cuda = os.path.join(self.dizin, "toolkit")
-        os.makedirs(os.path.join(cuda, "bin"))
+        alt = "bin" if windows else "lib64"
+        os.makedirs(os.path.join(cuda, alt))
         with mock.patch.dict(os.environ, {"CUDA_PATH": cuda}):
             dizinler = self.ys.cuda_dll_dizinleri(self.dizin)
         self.assertIn(bin_dizini, dizinler)
-        self.assertIn(os.path.join(cuda, "bin"), dizinler)
+        self.assertIn(os.path.join(cuda, alt), dizinler)
         self.assertIn("dll_dizinlerini_ekle", self.ym._DOGRULAMA_KODU)
 
     def _kur(self, cuda_calisir):
@@ -584,7 +589,12 @@ class CudaMotorTestleri(unittest.TestCase):
         self.assertEqual(kurulum["durum"], "tamam")
         self.assertEqual(kurulum["sonuc_tur"], "cpu")
         self.assertTrue(kurulum["cpuya_dustu"])
-        self.assertIn("DLL", hata["neden"])
+        self.assertIn("CUDA kitaplıkları", hata["neden"])
+        # "DLL" yalnızca Windows'ta söylenir (Linux/macOS'ta .so kitaplıkları).
+        if os.name == "nt":
+            self.assertIn("DLL", hata["neden"])
+        else:
+            self.assertNotIn("DLL", hata["neden"])
         self.assertTrue(hata["tarih"])
         # Başarılı CUDA kurulumu kaydı siler.
         hata, kurulum = self._kur(cuda_calisir=True)

@@ -1,3 +1,13 @@
 # turkod_ide imzalı (turkod_ide.manifest.json): Git satır sonlarını değiştirirse
 # (core.autocrlf) dosya hash'leri manifestle tutmaz. Dosyalar olduğu gibi saklanır.
 turkod_ide/** -text
+
+# Kabuk betikleri, AppRun, plist ve .desktop dosyaları Linux/macOS'ta CRLF ile
+# bozulur; Windows'ta (core.autocrlf) çekilse de LF kalsın. Testler de bunları
+# CRLF'siz bekler (tests/test_platform_katmani.py).
+*.sh text eol=lf
+platformlar/linux/AppRun text eol=lf
+*.desktop text eol=lf
+*.entitlements text eol=lf
+*.plist text eol=lf
+turkod_flutter/lib/platform_ayarlari.dart text eol=lf

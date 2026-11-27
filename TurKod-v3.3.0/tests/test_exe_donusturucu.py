@@ -97,17 +97,29 @@ class SecenekTestleri(unittest.TestCase):
         self.assertIn("tırnak", hatalar[0])
 
     def test_komut_metni_geri_ayristirilir(self):
-        ayar = exe.varsayilan_ayarlar()
-        ayar.update(ad="Uzay Oyunu", kayit_yeri=r"C:\Oyun Klasörü", pencere="konsol",
-                    kaynak=True, sonda_bekle=True, ekler=["resimler"])
-        metin = exe.komut_metni(r"C:\Kod\uzay oyunu.trpy", ayar)
-        self.assertTrue(metin.startswith('turkod exe_yap "C:\\Kod\\uzay oyunu.trpy"'))
-        k = kabuk.komut_mu(metin)
-        self.assertEqual(k[0], "exe_yap")
-        dosya, geri, hatalar = exe.argumanlari_ayristir(kabuk.TurKodKabugu._parcala(k[1]))
-        self.assertEqual(hatalar, [])
-        self.assertEqual(dosya, r"C:\Kod\uzay oyunu.trpy")
-        self.assertEqual(geri, ayar)
+        # EXE panelinin gösterdiği komut TürKod Terminali'ne yazılınca aynı
+        # ayarları verir. Linux/macOS'ta komut tek tırnaklıdır (shlex.quote);
+        # eskiden tırnaklar ada karışıyordu ("'Uzay Oyunu'").
+        from unittest import mock
+        for sistem, dosya, yer in (
+                ("win32", r"C:\Kod\uzay oyunu.trpy", r"C:\Oyun Klasörü"),
+                ("linux", "/home/ece/kod/uzay oyunu.trpy", "/home/ece/Oyun Klasörü"),
+                ("darwin", "/Users/ece/kod/uzay'ın oyunu.trpy", "/Users/ece/Oyun $Klasör")):
+            with self.subTest(sistem=sistem), mock.patch.object(sys, "platform", sistem):
+                ayar = exe.varsayilan_ayarlar()
+                ayar.update(ad="Uzay Oyunu", kayit_yeri=yer, pencere="konsol",
+                            kaynak=True, sonda_bekle=True, ekler=["resimler"])
+                metin = exe.komut_metni(dosya, ayar)
+                self.assertTrue(metin.startswith("turkod exe_yap " + exe._tirnak(dosya)))
+                if sistem == "win32":
+                    self.assertTrue(metin.startswith('turkod exe_yap "C:\\Kod\\uzay oyunu.trpy"'))
+                k = kabuk.komut_mu(metin)
+                self.assertEqual(k[0], "exe_yap")
+                dosya_geri, geri, hatalar = exe.argumanlari_ayristir(
+                    kabuk.TurKodKabugu._parcala(k[1]))
+                self.assertEqual(hatalar, [])
+                self.assertEqual(dosya_geri, dosya)
+                self.assertEqual(geri, ayar)
 
     def test_yardim_butun_secenekleri_anlatir(self):
         metin = exe.yardim_metni()
@@ -196,8 +208,12 @@ class GirisKoduTestleri(unittest.TestCase):
     def test_yabanci_klasor_ve_exe_silinmez(self):
         klasor = tempfile.mkdtemp(prefix="turkod_exe_hedef_")
         self.addCleanup(shutil.rmtree, klasor, True)
-        # uzay.trpy'nin yanında kullanıcının resimlerle dolu "uzay" klasörü.
-        kullanici = os.path.join(klasor, "uzay")
+        # Hedef adları sisteme göre: Windows uzay.exe, Linux uzantısız uzay,
+        # macOS pencereli programda uzay.app (bkz. exe.cikti_yollari).
+        pencere = exe.varsayilan_ayarlar()["pencere"]
+        # uzay.trpy'nin yanında, EXE'nin konacağı yerle aynı adlı, kullanıcının
+        # resimlerle dolu klasörü.
+        kullanici, _ = exe.cikti_yollari(klasor, "uzay", pencere, True)
         os.makedirs(kullanici)
         with open(os.path.join(kullanici, "resim.png"), "wb") as f:
             f.write(b"resim")
@@ -212,21 +228,23 @@ class GirisKoduTestleri(unittest.TestCase):
         self.assertIn("TürKod'un yapmadığı", "\n".join(cikti))
         self.assertTrue(os.path.isfile(os.path.join(kullanici, "resim.png")))
         # Önceki TürKod klasörü değiştirilebilir.
-        onceki = os.path.join(klasor, "say")
-        os.makedirs(os.path.join(onceki, "_internal"))
-        with open(os.path.join(onceki, "_internal", exe.IMZA_DOSYASI), "w") as f:
+        onceki, program = exe.cikti_yollari(klasor, "say", pencere, True)
+        ic = exe._ic_klasorleri(program)[0]
+        os.makedirs(ic)
+        with open(os.path.join(ic, exe.IMZA_DOSYASI), "w") as f:
             f.write(exe.IMZA + "\n")
-        open(os.path.join(onceki, "say.exe"), "wb").close()
+        open(program, "wb").close()
         self.assertIsNone(exe._hedef_engeli(onceki, True, "say"))
         # Tek dosyalı: TürKod'un yapmadığı aynı adlı EXE'nin üstüne yazılmaz.
-        baska = os.path.join(klasor, "oyun.exe")
+        baska, _ = exe.cikti_yollari(klasor, "oyun", "konsol", False)
         with open(baska, "wb") as f:
             f.write(b"MZ baska program")
         self.assertIsNotNone(exe._hedef_engeli(baska, False, "oyun"))
         with open(baska, "wb") as f:
             f.write(sahte_paket({exe.IMZA_DOSYASI: (exe.IMZA.encode(), b"x", 0)}))
         self.assertIsNone(exe._hedef_engeli(baska, False, "oyun"))
-        self.assertIsNone(exe._hedef_engeli(os.path.join(klasor, "yeni.exe"), False, "yeni"))
+        self.assertIsNone(exe._hedef_engeli(
+            exe.cikti_yollari(klasor, "yeni", "konsol", False)[0], False, "yeni"))
 
 
 class TurkceCiktiTestleri(unittest.TestCase):

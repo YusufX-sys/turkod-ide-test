@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if KOK not in sys.path:
@@ -499,21 +500,44 @@ class TerminalCdTestleri(unittest.TestCase):
         shutil.rmtree(self.klasor, ignore_errors=True)
 
     def test_cd_kalici_ve_dogrulanir(self):
+        # Windows'ta cmd kuralları ("cd..", "chdir", "cd /d"); taklitle her
+        # sistemde denenir.
         c = self.c
-        self.assertEqual(c._terminal_cd('cd "alt klasör"')["dizin"],
-                         os.path.join(self.klasor, "alt klasör"))
-        self.assertEqual(c._terminal_cwd(), os.path.join(self.klasor, "alt klasör"))
-        self.assertEqual(c._terminal_cd("cd..")["dizin"], self.klasor)
-        self.assertEqual(c._terminal_cd("chdir alt klasör")["dizin"],
-                         os.path.join(self.klasor, "alt klasör"))
-        r = c._terminal_cd("cd /d olmayan")
-        self.assertFalse(r["ok"])
-        self.assertEqual(c._terminal_cwd(), os.path.join(self.klasor, "alt klasör"))
-        self.assertIsNone(c._terminal_cd("cd alt && dir"))
-        self.assertIsNone(c._terminal_cd("dir"))
+        with mock.patch.object(sys, "platform", "win32"):
+            self.assertEqual(c._terminal_cd('cd "alt klasör"')["dizin"],
+                             os.path.join(self.klasor, "alt klasör"))
+            self.assertEqual(c._terminal_cwd(), os.path.join(self.klasor, "alt klasör"))
+            self.assertEqual(c._terminal_cd("cd..")["dizin"], self.klasor)
+            self.assertEqual(c._terminal_cd("chdir alt klasör")["dizin"],
+                             os.path.join(self.klasor, "alt klasör"))
+            r = c._terminal_cd("cd /d olmayan")
+            self.assertFalse(r["ok"])
+            self.assertEqual(c._terminal_cwd(), os.path.join(self.klasor, "alt klasör"))
+            self.assertIsNone(c._terminal_cd("cd alt && dir"))
+            self.assertIsNone(c._terminal_cd("dir"))
         if sys.platform == "win32":
             surucu = os.path.splitdrive(self.klasor)[0]
             self.assertEqual(c._terminal_cd(surucu)["dizin"], surucu + os.sep)
+
+    def test_cd_linux_ve_macos_kabugunda(self):
+        # Linux/macOS'ta sh kuralları: tek/çift tırnak, "cd .." boşluklu;
+        # "cd.." ve "chdir" sh komutu değildir, kabuğun kendisi yanıtlar.
+        c = self.c
+        for sistem in ("linux", "darwin"):
+            with self.subTest(sistem=sistem), mock.patch.object(sys, "platform", sistem):
+                c._terminal_dizini = None
+                self.assertEqual(c._terminal_cd("cd 'alt klasör'")["dizin"],
+                                 os.path.join(self.klasor, "alt klasör"))
+                self.assertEqual(c._terminal_cd("cd ..")["dizin"], self.klasor)
+                self.assertEqual(c._terminal_cd('cd "alt klasör"')["dizin"],
+                                 os.path.join(self.klasor, "alt klasör"))
+                self.assertIsNone(c._terminal_cd("cd.."))
+                self.assertIsNone(c._terminal_cd("chdir alt klasör"))
+                self.assertIsNone(c._terminal_cd("cd alt; ls"))
+                self.assertIsNone(c._terminal_cd("cd -"))
+                r = c._terminal_cd("cd olmayan")
+                self.assertFalse(r["ok"])
+                self.assertEqual(c._terminal_cwd(), os.path.join(self.klasor, "alt klasör"))
 
 
 class GirdiDogrulamaTestleri(unittest.TestCase):
