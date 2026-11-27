@@ -96,6 +96,7 @@ calistir eksikler eksikler_test.dart "$(yeni_profil turkod_eksik_)"
 calistir turkce-ceviri turkce_ceviri_test.dart "$(yeni_profil turkod_ceviri_)"
 calistir yeni-ozellikler yeni_ozellikler_test.dart "$(yeni_profil turkod_yeni_)"
 calistir buyuk-dosya buyuk_dosya_test.dart "$(yeni_profil turkod_buyuk_)"
+calistir pdf-araclari pdf_araclari_test.dart "$(yeni_profil turkod_pdf_)"
 
 # --- Özet ------------------------------------------------------------------------
 {

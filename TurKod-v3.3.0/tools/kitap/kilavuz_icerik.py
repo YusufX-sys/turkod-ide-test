@@ -560,18 +560,52 @@ SAYFALAR = [
         ("paragraf", "Gezgin'de bir PDF dosyasına tıklarsan TürKod onu yeni bir sekmede **sayfa sayfa** gösterir, "
                      "tıpkı bir kitap gibi. Örneğin bu kitabı proje klasörüne koyarsan bir sekmede kitabı okur, "
                      "öbür sekmede kodunu yazarsın."),
-        ("resim", "pdf_sekmesi.png", "Bu kitap, TürKod'un içinde bir PDF sekmesinde açık", 215),
+        ("resim", "pdf_sekmesi.png", "Bu kitap, TürKod'un içinde bir PDF sekmesinde açık", 190),
         ("tablo", ["Ne yapmak istiyorsun?", "Nasıl?"], [
             ["Sayfa değiştirmek", "Üstteki oklar, `PageUp` / `PageDown` ya da fare tekerleği"],
             ["Bir sayfaya atlamak", "Sayfa kutusuna numarayı yaz, `Enter`'a bas (`Home` / `End`: ilk / son sayfa)"],
             ["Hızla gezinmek", "Sağdaki renkli tutamacı yukarı aşağı sürükle; üstünde sayfa numarası yazar"],
+            ["Orta tekerlekle gezinmek", "Tekerleğe basılı tutup sürükle. Bir kez tıklarsan sayfa farenin "
+                                        "yönüne kendiliğinden akar (durdurmak için tıkla ya da `Esc`)"],
             ["Yakınlaştırmak", "Artılı büyüteç, `Ctrl` + fare tekerleği ya da `Ctrl+=`"],
             ["Uzaklaştırmak", "Eksili büyüteç, `Ctrl` + fare tekerleği ya da `Ctrl+-`"],
             ["Genişliğe sığdırmak", "Çerçeve düğmesi ya da `Ctrl+0`"],
             ["Bütün sayfayı görmek", "En sağdaki dikdörtgen düğme"],
         ], [1.5, 3]),
-        ("paragraf", "Yüzde yazısı ne kadar büyüttüğünü söyler. PDF yalnızca okunur, içine yazamazsın."),
+        ("paragraf", "İkinci çubuktaki kalem, yazı ve silgiyle kitabın üstüne not alabilirsin (sonraki sayfa)."),
         ("kodi", "Ben kitabı hep bir sekmede açık tutuyorum. Bir örneği okuyup hemen yandaki sekmede deniyorum!"),
+    ]),
+    # ------------------------------------------------------------------ 8d
+    ("Kitabın üstüne çizmek ve yazmak", "Kalemini al, önemli yerleri işaretle!", [
+        ("paragraf", "Okulda kitabının önemli yerlerinin altını çizersin, değil mi? TürKod'da da yapabilirsin! "
+                     "PDF sekmesinin ikinci çubuğundan bir araç seç; yanında o aracın ayarları çıkar."),
+        ("resim", "pdf_araclari.png", "Yeşil kalemle başlık daire içine alındı, sarı fosforlu kalemle önemli yer boyandı, kenara not yazıldı", 200),
+        ("tablo", ["Araç", "Ne yapar?", "Ayarları"], [
+            ["El", "Sayfayı tutup sürükleyerek gezersin (her zamanki hâli).", "-"],
+            ["Kalem", "Fareyi basılı tutup sayfaya çizersin.",
+             "9 renk, Kalınlık, Koyuluk (azaltırsan fosforlu kaleme döner)"],
+            ["Yazı", "Sayfaya tıkla, yaz, `Enter`'a bas. Yeni satır için `Shift+Enter`, vazgeçmek için `Esc`. "
+                     "Yazdığın bir yazıya tıklarsan onu düzeltebilirsin.", "Renk, Boyut"],
+            ["Silgi", "Silmek istediğin çizginin ya da yazının üstünden geç.",
+             "Boyut (silginin dairesi ne kadar büyük?)"],
+        ], [0.8, 2.7, 1.9]),
+        ("kodi", "Ben önemli yerleri sarı kalemle boyuyorum, sonra kenarına küçük notlar yazıyorum!"),
+    ]),
+    # ------------------------------------------------------------------ 8e
+    ("Çizimlerini geri almak ve silmek", "Hata yapmaktan korkma, her şey geri alınabilir.", [
+        ("paragraf", "Yanlış bir çizgi mi çektin? Hiç dert etme! İkinci çubuğun sağındaki üç düğme ve iki kısayol "
+                     "yaptığın her şeyi yönetir:"),
+        ("tablo", ["Ne yapmak istiyorsun?", "Nasıl?"], [
+            ["Son yaptığını geri almak", "`Ctrl+Z` ya da çubuğun sağındaki geri ok"],
+            ["Geri aldığını geri getirmek", "`Ctrl+Y` ya da ileri ok"],
+            ["Hepsini silip kitabı ilk hâline döndürmek", "En sağdaki dönen ok. Önce sana sorar; \"Evet\" "
+                                                          "dersen bütün çizimler ve yazılar silinir"],
+        ], [1.9, 3]),
+        ("kutu", "bilgi", "Çizdiklerin kitabı bozmaz: TürKod onları ayrı saklar, programı kapatıp açsan da yerinde "
+                          "durur. Yanlışlıkla ilk hâline döndürdüysen, programı kapatmadan `Ctrl+Z`'ye bas."),
+        ("kutu", "gorev", "Bu sayfanın başlığını sarı kalemle, düşük koyulukta boya: fosforlu kalem gibi olsun! "
+                          "Sonra kenara \"Öğrendim!\" yaz."),
+        ("kodi", "Bir keresinde yanlışlıkla bütün notlarımı sildim. `Ctrl+Z`'ye bastım, hepsi geri geldi. Oh be!"),
     ]),
     # ------------------------------------------------------------------ 9
     ("Editör: yazarken yardımcılar", "Sen yazarken editör seni izler ve yardım eder.", [

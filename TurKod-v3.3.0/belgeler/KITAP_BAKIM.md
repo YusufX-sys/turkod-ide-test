@@ -136,7 +136,8 @@ Pratik notlar (ilk çekimde öğrenildi):
 | groq_saglayici.png, groq_form.png | Sağlayıcı bağla: "groq" araması; anahtar yapıştırılmış form | Deneme profilinde, sahte anahtarla (noktalarla gizli); gerçek anahtar kullanılmadı |
 | groq_model_sec.png | Groq modelleri seçim penceresi | Kullanıcının oturumunda; pencerenin boş orta kısmı kesildi (üst 480 px + alt 90 px birleştirildi) |
 | groq_gorevler.png | Görevlere Groq modelleri atanmış, Kodi "Otomatik: Groq • ..." | Kullanıcının oturumunda Ayarlar → Yapay Zekâ: Görevler; yarım görünen üst satır kesildi |
-| pdf_sekmesi.png | Kitap PDF sekmesinde | Kitap `kitap.pdf` adıyla örnek projeye kopyalandı, Gezgin yenilendi, dosyaya tıklandı; (62, 84)-(996, 860) |
+| pdf_sekmesi.png | Kitap PDF sekmesinde (iki çubuk: gezinme + not araçları) | Kitap `kitap.pdf` adıyla örnek projeye kopyalandı, Gezgin yenilendi, dosyaya tıklandı; (62, 84)-(996, 860). 2026-11-27: not araçları çubuğu gelince yeniden çekildi |
+| pdf_araclari.png | Kitabın bir sayfasında yeşil kalemle daire, mavi yazıyla not; kalem ayarları açık | 2026-11-27, aynı profilde kitap.pdf açıldı, sayfa 5'e gidildi; genişliğe sığdırıldı (%135); Kalem yeşil, kalınlık 7 ile başlığın çevresine elips (`SetCursorPos` adımlarıyla, basılı fare), sarı kalınlık 16 koyuluk %35 ile "ne yapacağını bilmez" boyandı, Yazı aracıyla "Önemli!" yazıldı, Kalem yeniden seçildi; (371, 201)-(1424, 800) |
 | karsilama.png | Karşılama ekranı (hiç sekme yokken) | Profilde `son_dosyalar` = `C:\Kodlarım` içindeki iki dosya, sekme açık değil; editör alanı (366, 196)-(988, 830) kırpıldı |
 | komut_paleti.png | Komut Paleti, "kay" araması | Ctrl+Shift+P |
 | gezgin_sag_tik.png | Gezgin sağ tık menüsü | Dosyaya sağ tık |

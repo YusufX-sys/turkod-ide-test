@@ -27,6 +27,7 @@ import 'arayuz_turu.dart';
 import 'markdown_gorunum.dart';
 import 'platform_ayarlari.dart';
 import 'yardim.dart';
+import 'pdf_notlari.dart';
 
 part 'eklentiler.dart';
 part 'exe_donusturme.dart';
