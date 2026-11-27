@@ -41,7 +41,9 @@ ONERI_OMRU = 24 * 3600
 MOTOR_PAKETLERI = {
     "cpu": ("cpu", "0.3.36"),
     # Apple Silicon: Metal'li paket (ekran kartında hızlanır, işlemcide de çalışır).
-    "metal": ("metal", "0.3.36"),
+    # 0.3.36'nın Metal paketi yayımlandığı hâliyle bozuk (zip'teki dosyaların
+    # yarısı açılamıyor: "Bad CRC-32"); Apple Silicon'da motor kurulamıyordu.
+    "metal": ("metal", "0.3.38"),
     # Intel Mac: hazır paketi olan son sürüm 0.3.2 (yeni sürümler yalnızca kaynak
     # koduyla yayımlanıyor; derleyici olmadan kurulamaz). Varsayılan modelleri açar.
     "cpu-intel-mac": ("cpu", "0.3.2"),

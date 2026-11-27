@@ -365,6 +365,8 @@ class YerelModelTestleri(unittest.TestCase):
         self.assertIn(yerel_modeller.WHL_INDEKS.format(paket="cpu"), komut)
         komut = yerel_modeller._pip_komutu("py", "hedef", "metal")
         self.assertIn(yerel_modeller.WHL_INDEKS.format(paket="metal"), komut)
+        # 0.3.36'nın Metal paketi bozuk yayımlandı (pip "Bad CRC-32" ile düşüyordu).
+        self.assertIn("llama-cpp-python==0.3.38", komut)
         h = yerel_modeller.apple_hizlandirma(16)
         self.assertTrue(h["metal"])
         self.assertEqual(h["tur"], "cpu")
