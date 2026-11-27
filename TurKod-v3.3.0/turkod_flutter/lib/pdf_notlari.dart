@@ -126,8 +126,8 @@ class PdfYazi extends PdfNotu {
     required this.boyut,
   });
 
-  PdfYazi kopya({String? metin}) => PdfYazi(
-      sayfa: sayfa, konum: konum, metin: metin ?? this.metin, renk: renk, boyut: boyut);
+  PdfYazi kopya({String? metin}) =>
+      PdfYazi(sayfa: sayfa, konum: konum, metin: metin ?? this.metin, renk: renk, boyut: boyut);
 
   @override
   Map<String, dynamic> toJson() => {
@@ -236,11 +236,14 @@ class PdfNotDefteri extends ChangeNotifier {
       h ^= b;
       h *= 0x100000001b3; // 64 bitte taşar (istenen)
     }
-    return h.toUnsigned(64).toRadixString(16).padLeft(16, '0');
+    // Dart'ta 64 bitlik sayı işaretlidir: iki 32 bitlik yarı ayrı yazılır
+    // (eskiden ad "-" ile başlayabiliyordu).
+    String yari(int v) => (v & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
+    return '${yari(h >> 32)}${yari(h)}';
   }
 
-  static File notDosyasi(String pdfYolu, {String? kok}) => File(p.join(
-      kok ?? _notKoku(), 'pdf_notlari', '${pdfAnahtari(pdfYolu)}.json'));
+  static File notDosyasi(String pdfYolu, {String? kok}) =>
+      File(p.join(kok ?? _notKoku(), 'pdf_notlari', '${pdfAnahtari(pdfYolu)}.json'));
 
   void _yukle(String pdfYolu) {
     final f = dosya;
@@ -250,8 +253,7 @@ class PdfNotDefteri extends ChangeNotifier {
       if (!f.existsSync()) return;
       final j = jsonDecode(f.readAsStringSync());
       if (j is! Map || j['notlar'] is! List) return;
-      _notlar = List.unmodifiable(
-          (j['notlar'] as List).map(PdfNotu.fromJson).whereType<PdfNotu>());
+      _notlar = List.unmodifiable((j['notlar'] as List).map(PdfNotu.fromJson).whereType<PdfNotu>());
     } catch (_) {
       // Bozuk dosya: notsuz başlanır, dosyaya ilk değişiklikte yazılır.
     }
@@ -416,8 +418,7 @@ class PdfAracAyarlari extends ChangeNotifier {
 
   /// Bütün PDF sekmelerinin kullandığı ayarlar.
   static PdfAracAyarlari get ortak => _ortak ??= () {
-        final a = PdfAracAyarlari(
-            dosya: File(p.join(_notKoku(), 'pdf_notlari', 'araclar.json')));
+        final a = PdfAracAyarlari(dosya: File(p.join(_notKoku(), 'pdf_notlari', 'araclar.json')));
         a._yukle();
         return a;
       }();
@@ -501,8 +502,7 @@ class PdfNotBoyayici extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..isAntiAlias = true;
         if (c.noktalar.length == 1) {
-          canvas.drawCircle(c.noktalar.first * w, kalem.strokeWidth / 2,
-              Paint()..color = renk);
+          canvas.drawCircle(c.noktalar.first * w, kalem.strokeWidth / 2, Paint()..color = renk);
           return;
         }
         final yol = Path()..moveTo(c.noktalar.first.dx * w, c.noktalar.first.dy * w);

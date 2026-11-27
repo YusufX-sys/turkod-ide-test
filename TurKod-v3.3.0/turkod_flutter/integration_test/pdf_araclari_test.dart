@@ -105,7 +105,10 @@ void main() {
     final ed = ctx.read<app.EditorProvider>();
     await _bekle(t, const Duration(seconds: 2));
 
-    final kitap = belgeYolu(kKitapDosyasi);
+    // macOS'ta uygulama .app paketinin içinden çalışır; kitap orada aranınca
+    // bulunamazsa deponun belgeler klasöründen alınır (test turkod_flutter'da başlar).
+    final depodaki = p.normalize(p.join(Directory.current.path, '..', 'belgeler', kKitapDosyasi));
+    final kitap = belgeYolu(kKitapDosyasi) ?? (File(depodaki).existsSync() ? depodaki : null);
     expect(kitap, isNotNull, reason: 'Kitap PDF bulunamadı');
     await ed.openFile(kitap!);
     final defter = PdfNotDefteri.al(kitap);

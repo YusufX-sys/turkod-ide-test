@@ -524,113 +524,132 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
         color: cs.surfaceContainer,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: Row(children: [
-        const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Color(0xFFEF4444)),
-        const SizedBox(width: 8),
-        // Kalan bütün genişlik adındır (Flexible + Spacer yarıya bölüyor,
-        // uzun adlar gereksiz yere kısalıyordu).
-        Expanded(
-          child: Text(p.basename(widget.yol),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
-        ),
-        const SizedBox(width: 8),
-        // Sayfa gezinme
-        PanelDugmesi(
-          ikon: Icons.keyboard_arrow_up_rounded,
-          ipucu: 'Önceki sayfa',
-          onPressed: _hazir && (_sayfa ?? 1) > 1 ? () => _sayfayaGit((_sayfa ?? 1) - 1) : null,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: !_hazir
-              ? Text('Yükleniyor…',
-                  style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8)))
-              : Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text('Sayfa ',
-                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8))),
-                  // Numarayı yaz, Enter'a bas: o sayfaya gidilir.
-                  Tooltip(
-                    message: 'Sayfa numarasını yaz, Enter\'a bas',
-                    child: SizedBox(
-                      width: 46,
-                      height: 26,
-                      child: TextField(
-                        controller: _sayfaKutusu,
-                        focusNode: _sayfaOdak,
-                        textAlign: TextAlign.center,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: TextStyle(fontSize: 12, color: cs.onSurface),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                          filled: true,
-                          fillColor: cs.surfaceContainerHighest,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: cs.outlineVariant)),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: cs.outlineVariant)),
-                        ),
-                        onTap: () => _sayfaKutusu.selection =
-                            TextSelection(baseOffset: 0, extentOffset: _sayfaKutusu.text.length),
-                        onSubmitted: _sayfaKutusuGonder,
-                        onTapOutside: (_) {
-                          _sayfaOdak.unfocus();
-                          setState(_sayfaKutusunuGuncelle);
-                        },
-                      ),
-                    ),
-                  ),
-                  Text(' / $_sayfaSayisi',
-                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8))),
-                ]),
-        ),
-        PanelDugmesi(
-          ikon: Icons.keyboard_arrow_down_rounded,
-          ipucu: 'Sonraki sayfa',
-          onPressed:
-              _hazir && (_sayfa ?? 1) < _sayfaSayisi ? () => _sayfayaGit((_sayfa ?? 1) + 1) : null,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: SizedBox(height: 20, child: VerticalDivider(width: 1, color: cs.outlineVariant)),
-        ),
-        // Yakınlaştırma
-        PanelDugmesi(
-          ikon: Icons.zoom_out_rounded,
-          ipucu: 'Uzaklaştır (${kisayolTusuAdi()} + -)',
-          onPressed: _hazir ? _uzaklas : null,
-        ),
-        Container(
-          width: 58,
-          alignment: Alignment.center,
-          child: Text('%${(_yakinlik * 100).round()}',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.85))),
-        ),
-        PanelDugmesi(
-          ikon: Icons.zoom_in_rounded,
-          ipucu: 'Yakınlaştır (${kisayolTusuAdi()} + +)',
-          onPressed: _hazir ? _yakinlas : null,
-        ),
-        const SizedBox(width: 4),
-        PanelDugmesi(
-          ikon: Icons.fit_screen_outlined,
-          ipucu: 'Genişliğe sığdır (${kisayolTusuAdi()} + 0)',
-          onPressed: _hazir ? _genisligeSigdir : null,
-        ),
-        PanelDugmesi(
-          ikon: Icons.crop_portrait_rounded,
-          ipucu: 'Bütün sayfayı göster',
-          onPressed: _hazir ? _sayfayiSigdir : null,
-        ),
-      ]),
+      child: LayoutBuilder(builder: (context, kisit) {
+        final genislik = kisit.maxWidth;
+        return Row(children: [
+          const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Color(0xFFEF4444)),
+          const SizedBox(width: 8),
+          // Kalan bütün genişlik adındır (Flexible + Spacer yarıya bölüyor,
+          // uzun adlar gereksiz yere kısalıyordu).
+          Expanded(
+            child: Text(p.basename(widget.yol),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
+          ),
+          const SizedBox(width: 8),
+          // Dar yerde düğmeler taşmaz, yana kayar; adın en az 40 pikseli kalır.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: math.max(0.0, genislik - 86)),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                // Sayfa gezinme
+                PanelDugmesi(
+                  ikon: Icons.keyboard_arrow_up_rounded,
+                  ipucu: 'Önceki sayfa',
+                  onPressed:
+                      _hazir && (_sayfa ?? 1) > 1 ? () => _sayfayaGit((_sayfa ?? 1) - 1) : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: !_hazir
+                      ? Text('Yükleniyor…',
+                          style:
+                              TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8)))
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text('Sayfa ',
+                              style: TextStyle(
+                                  fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8))),
+                          // Numarayı yaz, Enter'a bas: o sayfaya gidilir.
+                          Tooltip(
+                            message: 'Sayfa numarasını yaz, Enter\'a bas',
+                            child: SizedBox(
+                              width: 46,
+                              height: 26,
+                              child: TextField(
+                                controller: _sayfaKutusu,
+                                focusNode: _sayfaOdak,
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                style: TextStyle(fontSize: 12, color: cs.onSurface),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                  filled: true,
+                                  fillColor: cs.surfaceContainerHighest,
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: BorderSide(color: cs.outlineVariant)),
+                                  enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: BorderSide(color: cs.outlineVariant)),
+                                ),
+                                onTap: () => _sayfaKutusu.selection = TextSelection(
+                                    baseOffset: 0, extentOffset: _sayfaKutusu.text.length),
+                                onSubmitted: _sayfaKutusuGonder,
+                                onTapOutside: (_) {
+                                  _sayfaOdak.unfocus();
+                                  setState(_sayfaKutusunuGuncelle);
+                                },
+                              ),
+                            ),
+                          ),
+                          Text(' / $_sayfaSayisi',
+                              style: TextStyle(
+                                  fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8))),
+                        ]),
+                ),
+                PanelDugmesi(
+                  ikon: Icons.keyboard_arrow_down_rounded,
+                  ipucu: 'Sonraki sayfa',
+                  onPressed: _hazir && (_sayfa ?? 1) < _sayfaSayisi
+                      ? () => _sayfayaGit((_sayfa ?? 1) + 1)
+                      : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                      height: 20, child: VerticalDivider(width: 1, color: cs.outlineVariant)),
+                ),
+                // Yakınlaştırma
+                PanelDugmesi(
+                  ikon: Icons.zoom_out_rounded,
+                  ipucu: 'Uzaklaştır (${kisayolTusuAdi()} + -)',
+                  onPressed: _hazir ? _uzaklas : null,
+                ),
+                Container(
+                  width: 58,
+                  alignment: Alignment.center,
+                  child: Text('%${(_yakinlik * 100).round()}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface.withValues(alpha: 0.85))),
+                ),
+                PanelDugmesi(
+                  ikon: Icons.zoom_in_rounded,
+                  ipucu: 'Yakınlaştır (${kisayolTusuAdi()} + +)',
+                  onPressed: _hazir ? _yakinlas : null,
+                ),
+                const SizedBox(width: 4),
+                PanelDugmesi(
+                  ikon: Icons.fit_screen_outlined,
+                  ipucu: 'Genişliğe sığdır (${kisayolTusuAdi()} + 0)',
+                  onPressed: _hazir ? _genisligeSigdir : null,
+                ),
+                PanelDugmesi(
+                  ikon: Icons.crop_portrait_rounded,
+                  ipucu: 'Bütün sayfayı göster',
+                  onPressed: _hazir ? _sayfayiSigdir : null,
+                ),
+              ]),
+            ),
+          ),
+        ]);
+      }),
     );
 
     return CallbackShortcuts(
