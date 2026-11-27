@@ -193,10 +193,24 @@ _indirme = {"durum": "yok", "indirilen": 0, "toplam": 0, "yol": "", "hata": "", 
 _kilit = threading.Lock()
 
 
+def indirme_klasoru() -> Path:
+    """Kurulum dosyasının indirildiği klasör. Windows'ta kullanıcıya özel
+    %TEMP%; Linux/macOS'ta herkesin yazabildiği /tmp yerine kullanıcının veri
+    klasörü (başka bir kullanıcı aynı adla dosya/bağlantı hazırlayamasın)."""
+    if platform_katmani.windows_mu():
+        return Path(tempfile.gettempdir()) / "turkod_guncelleme"
+    return Path(platform_katmani.veri_klasoru()) / "guncelleme"
+
+
 def _indir(m: dict, ilerleme=None) -> dict:
     """Kurulum dosyasını indirir, SHA-256'yı doğrular. Başarıda {"ok": True, "yol": ...}."""
-    dizin = Path(tempfile.gettempdir()) / "turkod_guncelleme"
-    dizin.mkdir(exist_ok=True)
+    dizin = indirme_klasoru()
+    dizin.mkdir(parents=True, exist_ok=True)
+    if not platform_katmani.windows_mu():
+        try:
+            os.chmod(dizin, 0o700)
+        except OSError:
+            pass
     tur = m.get("tur") or "setup"
     on_ek = "TurKod-Setup" if tur == "setup" else "TurKod"
     hedef = dizin / f"{on_ek}-{m['version']}{_DOSYA_UZANTISI.get(tur, '.exe')}"
@@ -334,23 +348,39 @@ def kurulum_dogrula(yol: str) -> dict:
     SHA-256 yalnızca indirme sırasında kontrol ediliyordu; dosya ise tahmin
     edilebilir bir %TEMP% yolunda, dosyalar kaydedilene kadar bekliyordu.
     Arada değiştirilen bir .exe imzasız olarak sessizce çalıştırılabiliyordu."""
+    beklenen, hata = _beklenen_sha(yol)
+    if hata:
+        return hata
+    try:
+        ozet = _sha256(yol)
+    except OSError as e:
+        return {"ok": False, "hata": f"Kurulum dosyası okunamadı: {e}"}
+    if ozet != beklenen:
+        return _DEGISMIS
+    return {"ok": True}
+
+
+_DEGISMIS = {"ok": False, "hata": "Kurulum dosyası indirildikten sonra değiştirilmiş; "
+                                  "güvenlik nedeniyle çalıştırılmadı."}
+
+
+def _beklenen_sha(yol):
+    """(beklenen SHA-256, None) ya da yol indirilen dosya değilse (None, hata)."""
     with _kilit:
         beklenen = _indirme.get("sha256")
         hedef = _indirme.get("yol")
     if not beklenen or not hedef or not yol or \
             os.path.normcase(os.path.abspath(yol)) != os.path.normcase(os.path.abspath(hedef)):
-        return {"ok": False, "hata": "Bilinmeyen kurulum dosyası."}
+        return None, {"ok": False, "hata": "Bilinmeyen kurulum dosyası."}
+    return beklenen, None
+
+
+def _sha256(yol) -> str:
     h = hashlib.sha256()
-    try:
-        with open(yol, "rb") as f:
-            for parca in iter(lambda: f.read(1024 * 1024), b""):
-                h.update(parca)
-    except OSError as e:
-        return {"ok": False, "hata": f"Kurulum dosyası okunamadı: {e}"}
-    if h.hexdigest() != beklenen:
-        return {"ok": False, "hata": "Kurulum dosyası indirildikten sonra değiştirilmiş; "
-                                     "güvenlik nedeniyle çalıştırılmadı."}
-    return {"ok": True}
+    with open(yol, "rb") as f:
+        for parca in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(parca)
+    return h.hexdigest()
 
 
 def uygula(yol: str) -> dict:
@@ -365,19 +395,30 @@ def uygula(yol: str) -> dict:
     hedef = _posix.appimage_yolu()
     if not hedef:
         return {"ok": False, "hata": "TürKod bir AppImage dosyasından çalışmıyor."}
-    d = kurulum_dogrula(yol)
-    if not d.get("ok"):
-        return d
-    gecici = hedef + ".yeni"
+    beklenen, hata = _beklenen_sha(yol)
+    if hata:
+        return hata
+    # Doğrulama ile kurulum AYNI içerik üzerinde yapılır: dosya önce hedefin
+    # yanına (yalnızca bizim açtığımız, benzersiz adlı) geçici kopyaya alınır,
+    # SHA-256 bu kopyada denetlenir ve kopya yerine konur. Eskiden önce indirilen
+    # dosya doğrulanıp sonra yeniden okunuyordu; arada değiştirilebilirdi.
+    gecici = None
     try:
-        shutil.copyfile(yol, gecici)
+        fd, gecici = tempfile.mkstemp(prefix=".TurKod-yeni-",
+                                      dir=os.path.dirname(hedef) or None)
+        with os.fdopen(fd, "wb") as hedef_dosya, open(yol, "rb") as kaynak:
+            shutil.copyfileobj(kaynak, hedef_dosya, 1024 * 1024)
+        if _sha256(gecici) != beklenen:
+            os.remove(gecici)
+            return _DEGISMIS
         os.chmod(gecici, 0o755)
         os.replace(gecici, hedef)
     except OSError as e:
-        try:
-            os.remove(gecici)
-        except OSError:
-            pass
+        if gecici:
+            try:
+                os.remove(gecici)
+            except OSError:
+                pass
         return {"ok": False, "hata": f"TürKod dosyası yenilenemedi ({e}). Dosyanın "
                                      "bulunduğu klasöre yazma iznin olduğundan emin ol."}
     return {"ok": True, "baslat": hedef}

@@ -204,6 +204,7 @@ class TurKodKabugu:
         self.giris = giris or sys.stdin
         self.cikis = cikis or sys.stdout
         self.ad_alani = None
+        self._satir_duzenleme = self._satir_duzenleme_kur()
         self.kaynak = []          # bu oturumda çalışan TürKod girişleri
         self.sifirla()
 
@@ -569,7 +570,31 @@ class TurKodKabugu:
         return "cik"
 
     # -- döngü --------------------------------------------------------
+    def _satir_duzenleme_kur(self):
+        """Linux/macOS terminalinde ok tuşları ve komut geçmişi: Python'un
+        readline modülü input()'a bağlanır (sys.stdin.readline'a değil).
+        Windows'ta konsolun kendi satır düzenlemesi vardır; readline yoksa
+        (bazı Python derlemeleri) sessizce eski yoldan okunur."""
+        if platform_katmani.windows_mu():
+            return False
+        if self.giris is not sys.stdin or self.cikis is not sys.stdout:
+            return False
+        try:
+            if not (self.giris.isatty() and self.cikis.isatty()):
+                return False
+        except (AttributeError, ValueError):
+            return False
+        try:
+            import readline  # noqa: F401  (input()'a satır düzenleme ekler)
+        except ImportError:
+            return False
+        return True
+
     def _satir_oku(self, istem):
+        if getattr(self, "_satir_duzenleme", False):
+            self._tampondan = False
+            # input() EOF'ta (Ctrl+D) EOFError verir; ok tuşları/geçmiş readline'dan.
+            return _ASIL_INPUT(istem).rstrip("\r\n")
         self.cikis.write(istem)
         self.cikis.flush()
         bas = time.monotonic()

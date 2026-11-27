@@ -28,6 +28,41 @@ def kaynak_yolu(dosya_adi: str = "") -> str:
     return base
 
 
+def kullanici_eki() -> str:
+    """Linux/macOS'ta paylaşılan /tmp'deki adlar kullanıcıya özel olsun diye
+    "-<uid>" eki (başka kullanıcı aynı adla klasör/bağlantı hazırlayamasın).
+    Windows'ta %TEMP% zaten kullanıcıya özeldir: ek yok."""
+    if platform_katmani.windows_mu() or not hasattr(os, "getuid"):
+        return ""
+    return f"-{os.getuid()}"
+
+
+def gecici_klasor_adi() -> str:
+    return "TurKod" + kullanici_eki()
+
+
+def port_dosyasi_adi() -> str:
+    return "turkod_backend_port" + kullanici_eki()
+
+
+def port_dosyasi_yolu() -> str:
+    """Sunucunun portunu yazdığı dosya (arayüz bağlanırken okur; bkz.
+    turkod_flutter/lib/main.dart AppConfig.portDosyasi). Windows'ta
+    %TEMP%\\turkod_backend_port (kullanıcıya özel). Linux/macOS'ta paylaşılan
+    /tmp yerine kullanıcının veri klasöründe "backend_port": başka bir
+    kullanıcı sahte bir port yazıp arayüzü kendi sunucusuna yönlendiremesin.
+    Arayüz kullanıcı kimliğini (uid) bilmediği için /tmp'de uid ekli ad
+    kullanılamazdı."""
+    if platform_katmani.windows_mu():
+        return os.path.join(tempfile.gettempdir(), "turkod_backend_port")
+    klasor = platform_katmani.veri_klasoru()
+    try:
+        os.makedirs(klasor, exist_ok=True)
+    except OSError:
+        pass
+    return os.path.join(klasor, "backend_port")
+
+
 def calisma_yolu(dosya_adi: str = "") -> str:
     """Yazilabilir calisma zamani dosyalari icin yol uretir."""
     if getattr(sys, "frozen", False):
@@ -41,7 +76,7 @@ def calisma_yolu(dosya_adi: str = "") -> str:
     # bozuk) eskiden dictionary.py içe aktarılırken backend çöküyor, program
     # hiç açılmıyordu. Geçici klasöre düşülür; o da olmazsa kullanılabilir
     # olmasa da bir yol döndürülür (yazma noktaları zaten hataları yakalıyor).
-    for aday in (base, os.path.join(tempfile.gettempdir(), "TurKod")):
+    for aday in (base, os.path.join(tempfile.gettempdir(), gecici_klasor_adi())):
         try:
             os.makedirs(aday, exist_ok=True)
             base = aday

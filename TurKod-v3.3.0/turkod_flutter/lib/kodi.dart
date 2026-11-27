@@ -10,11 +10,91 @@ part of 'main.dart';
 
 const String kKodiSelam = 'Merhaba, ben Kodi!';
 
+/// Kodi'nin silüeti: RGBA resminde ([w] x [h]) boyalı (saydamlığı [esik]'ten
+/// büyük) yerleri kaplayan dikdörtgenler; her piksel [hucre] mantıksal piksel.
+/// Kenarlar [genislet] piksel genişletilir (yumuşak kenarlar ve kıpırdayan
+/// kollar açıkta kalmasın). Aynı satır aralıkları alt alta birleştirilir
+/// (pencere bölgesi az parçalı olsun).
+List<Rect> kodiSilueti(Uint8List rgba, int w, int h,
+    {double hucre = 1, int esik = 24, int genislet = 2}) {
+  if (w <= 0 || h <= 0 || rgba.length < w * h * 4) return const [];
+  final dolu = List<bool>.filled(w * h, false);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      if (rgba[(y * w + x) * 4 + 3] <= esik) continue;
+      for (var yy = math.max(0, y - genislet); yy <= math.min(h - 1, y + genislet); yy++) {
+        for (var xx = math.max(0, x - genislet); xx <= math.min(w - 1, x + genislet); xx++) {
+          dolu[yy * w + xx] = true;
+        }
+      }
+    }
+  }
+  final sonuc = <Rect>[];
+  // Açık aralıklar: (x0, x1) -> başladığı satır.
+  var acik = <(int, int), int>{};
+  for (var y = 0; y <= h; y++) {
+    final araliklar = <(int, int)>[];
+    if (y < h) {
+      var x = 0;
+      while (x < w) {
+        if (!dolu[y * w + x]) {
+          x++;
+          continue;
+        }
+        final bas = x;
+        while (x < w && dolu[y * w + x]) {
+          x++;
+        }
+        araliklar.add((bas, x));
+      }
+    }
+    final yeni = <(int, int), int>{};
+    for (final a in araliklar) {
+      yeni[a] = acik.remove(a) ?? y;
+    }
+    for (final e in acik.entries) {
+      sonuc.add(Rect.fromLTRB(
+          e.key.$1 * hucre, e.value * hucre, e.key.$2 * hucre, y * hucre));
+    }
+    acik = yeni;
+  }
+  return sonuc;
+}
+
+/// Harf harf yazılan metnin ilk [n] birimi. Dart'ta dizinler harf değil
+/// UTF-16 birimidir; emoji gibi iki birimli harfler ortadan bölünürse Flutter
+/// "string is not well-formed UTF-16" hatası veriyordu (Kodi emojili bir
+/// cevabı yazarken). Bölünecekse harfin ikinci yarısı da alınır.
+String kodiYarimMetin(String s, int n) {
+  if (n <= 0) return '';
+  if (n >= s.length) return s;
+  if ((s.codeUnitAt(n - 1) & 0xFC00) == 0xD800) n++;
+  return s.substring(0, n);
+}
+
 /// Kayıtlı sohbet yeniden açılınca Kodi'nin karşılaması (kaydedilmez:
 /// eskiden her açılışta bir tane daha birikiyordu).
 const String kKodiTekrarHosGeldin = 'Tekrar hoş geldin! Kaldığımız yerden devam edebiliriz.';
 
-enum KodiIfadesi { mutlu, konusuyor, dusunceli, uzgun, dinliyor }
+/// Kodi'nin yüzü. İlk beşini program seçer (sohbetin durumu); diğerlerini
+/// yapay zekâ "ifade" eylemiyle seçer (bkz. kodi_ifade.dart).
+enum KodiIfadesi {
+  mutlu,
+  konusuyor,
+  dusunceli,
+  uzgun,
+  dinliyor,
+  heyecanli,
+  saskin,
+  kahkaha,
+  gozKirp,
+  sevgi,
+  utangac,
+  merakli,
+  endiseli,
+  uykulu,
+  gururlu,
+}
 
 /// Ancak açık bir kod dosyasıyla anlamı olan komutlar (PDF ya da Ayarlar
 /// sekmesindeyken "çalıştı" denip hiçbir şey olmuyordu).
@@ -70,6 +150,7 @@ const Set<String> kKodiGuvenliKomutlar = {
   'view.extensions',
   'view.keybindings',
   'learn.book',
+  'learn.libraries',
   'help.tour',
 };
 
@@ -175,6 +256,30 @@ class KodiEylemi {
   }
 }
 
+/// Uygulamanın kökündeki RepaintBoundary (MaterialApp.builder). Açık menü ve
+/// pencereler dahil TürKod'un ekranda gösterdiği her şey bunun içindedir.
+final GlobalKey kAnaPencereAnahtari = GlobalKey(debugLabel: 'anaPencere');
+
+/// TürKod penceresinin görüntüsü (base64 PNG, en uzun kenar en çok 1600 px) ya da
+/// null. Linux/macOS'ta Kodi'nin "yalnızca TürKod penceresi" kipi bunu kullanır.
+Future<String?> anaPencereGoruntusu() async {
+  final nesne = kAnaPencereAnahtari.currentContext?.findRenderObject();
+  if (nesne is! RenderRepaintBoundary || !nesne.hasSize) return null;
+  try {
+    final enUzun = math.max(nesne.size.width, nesne.size.height);
+    if (enUzun <= 0) return null;
+    final oran = math.min(
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio,
+        1600 / enUzun);
+    final resim = await nesne.toImage(pixelRatio: oran);
+    final veri = await resim.toByteData(format: ui.ImageByteFormat.png);
+    resim.dispose();
+    return veri == null ? null : base64Encode(veri.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+}
+
 class KodiMesaji {
   final bool kodiden;
   final String metin;
@@ -195,6 +300,9 @@ class KodiMesaji {
   /// Kodi'nin kendi başına sürdürdüğü adım ("Sayfa açıldı, devam ediyorum").
   final bool otomatik;
 
+  /// Yapay zekânın bu cevap için seçtiği hâl (yüz, poz, hareket, efekt).
+  final KodiHali? ifade;
+
   /// Güvenli işleri başlatıldı mı (bir kez başlatılır; balon da sağlayıcı
   /// da başlatabilir, iş iki kez yapılmaz)?
   bool eylemlerBasladi = false;
@@ -208,6 +316,7 @@ class KodiMesaji {
       this.harfMs = 14,
       this.goruntu,
       this.otomatik = false,
+      this.ifade,
       List<KodiEylemi>? eylemler})
       : eylemler = eylemler ?? [];
 
@@ -218,6 +327,7 @@ class KodiMesaji {
         'ayar': ayarDugmesi,
         if (goruntu != null) 'goruntu': goruntu,
         if (otomatik) 'otomatik': true,
+        if (ifade != null) 'ifade': ifade!.json(),
         'eylemler': [for (final e in eylemler) e.json()],
       };
 
@@ -230,6 +340,7 @@ class KodiMesaji {
         yazilsin: false,
         goruntu: m['goruntu']?.toString(),
         otomatik: m['otomatik'] == true,
+        ifade: KodiHali.jsondan(m['ifade']),
         eylemler: [
           for (final e in (m['eylemler'] as List?) ?? const [])
             if (e is Map) KodiEylemi.jsondanTam(Map<String, dynamic>.from(e)),
@@ -268,6 +379,8 @@ class KodiProvider extends ChangeNotifier {
   /// KodiKatmani kurar (ana pencerede): bağlam, ayarlar ve eylemler.
   Map<String, dynamic> Function()? baglamUret;
   bool Function()? dusunmeOku;
+  /// Ayarlar → Kodi → görüntü kipi ('kapali' | 'pencere' | 'ekran').
+  String Function()? goruntuKipiOku;
   bool Function()? sesliOku;
   Future<void> Function(KodiEylemi e, {String? hedef})? eylemUygula;
   VoidCallback? ayarlarAc;
@@ -680,7 +793,9 @@ class KodiProvider extends ChangeNotifier {
 
   /// Ana pencerede: masaüstü penceresini gizlice hazırlar (Kodi açılınca).
   Future<void> masaustunuHazirla() async {
-    if (pencereKipi || !Platform.isWindows || _hazirPencere || _pencereHazirlaniyor ||
+    // Windows, Linux (GTK) ve macOS'ta yerel kod saydam Kodi penceresini kurar
+    // (windows/runner, linux/runner/my_application.cc, macos/Runner).
+    if (pencereKipi || _hazirPencere || _pencereHazirlaniyor ||
         masaustunde) {
       return;
     }
@@ -1254,8 +1369,16 @@ class KodiProvider extends ChangeNotifier {
       if (no != _istek) return; // kullanıcı vazgeçti
       final yetkiler = baglam?['yetkiler'];
       hepSor = yetkiler is Map && yetkiler['hep_sor'] == true;
+      // Windows'ta TürKod penceresini arka uç bulur; Linux/macOS'ta arayüz kendi
+      // penceresinin görüntüsünü gönderir (eskiden bu kip orada çalışmıyordu).
+      final pencereGoruntusu =
+          pencereGoruntusuArayuzden() && goruntuKipiOku?.call() == 'pencere'
+              ? await anaPencereGoruntusu()
+              : null;
+      if (no != _istek) return; // kullanıcı vazgeçti
       final r = await _backend.call('kodi_sor', {
         'mesaj': soru,
+        if (pencereGoruntusu != null) 'pencere_goruntusu': pencereGoruntusu,
         'dusunme': dusunme,
         if (baglam != null) 'baglam': baglam,
         // Kodi'nin kendi sürdürdüğü tarayıcı adımı: sınıra takılırsa motor
@@ -1272,7 +1395,8 @@ class KodiProvider extends ChangeNotifier {
         ];
         var metin = (r['cevap'] ?? '').toString().trim();
         if (metin.isEmpty && eylemler.isNotEmpty) metin = 'Hemen yapıvereyim!';
-        final cevap = KodiMesaji(true, metin, eylemler: eylemler);
+        final cevap =
+            KodiMesaji(true, metin, eylemler: eylemler, ifade: KodiHali.jsondan(r['ifade']));
         mesajlar.add(cevap);
       } else {
         mesajlar.add(KodiMesaji(
@@ -1349,6 +1473,30 @@ class KodiRessami extends CustomPainter {
   /// Robot yatay aynalanır (düşünme pozu sola dönük); göğüsteki "</>" yazısı
   /// ters dönmez.
   final bool aynala;
+
+  /// Pozu, hareketi ve çevresindeki efekt (yapay zekânın seçtiği hâl).
+  final KodiPozu poz;
+  final KodiHareketi hareket;
+  final KodiEfekti efekt;
+
+  /// Konuşurken ağız oynar; gözler [ifade]'den gelir (yapay zekâ bir yüz
+  /// seçtiyse Kodi o yüzle konuşur).
+  final bool agizOynar;
+
+  /// Önceki hâlden yenisine geçiş: [gecis] 0 → önceki hâl, 1 → yeni hâl.
+  /// Kollar nokta nokta kayar, yüzler birbirine karışır, hareket ve efektler
+  /// yavaşça söner / büyür (eskiden bir anda değişiyordu).
+  final KodiIfadesi? oncekiIfade;
+  final KodiPozu? oncekiPoz;
+  final KodiHareketi? oncekiHareket;
+  final KodiEfekti? oncekiEfekt;
+  final double gecis;
+
+  /// Yatay yön: 1 normal, -1 aynalı; arası dönerken (verilmezse [aynala]).
+  final double? ayna;
+
+  /// Gözlerin baktığı yer (-1..1).
+  final Offset bakis;
   const KodiRessami({
     this.ifade = KodiIfadesi.mutlu,
     this.t = 0,
@@ -1357,7 +1505,66 @@ class KodiRessami extends CustomPainter {
     this.elSalla = false,
     this.sadeceBas = false,
     this.aynala = false,
+    this.poz = KodiPozu.normal,
+    this.hareket = KodiHareketi.yok,
+    this.efekt = KodiEfekti.yok,
+    this.agizOynar = false,
+    this.oncekiIfade,
+    this.oncekiPoz,
+    this.oncekiHareket,
+    this.oncekiEfekt,
+    this.gecis = 1,
+    this.ayna,
+    this.bakis = Offset.zero,
   });
+
+  /// Çizilecek poz: seçilmediyse düşünürken düşünme pozu, selamlaşırken el
+  /// sallama.
+  static KodiPozu cozulmusPoz(KodiIfadesi ifade, KodiPozu poz, bool elSalla) =>
+      poz != KodiPozu.normal
+          ? poz
+          : ifade == KodiIfadesi.dusunceli
+              ? KodiPozu.dusun
+              : elSalla
+                  ? KodiPozu.elSalla
+                  : KodiPozu.normal;
+
+  bool get _geciyor => gecis < 1;
+
+  /// [hedef]'in görünürlüğü (0-1): yeni hâlde varsa k, önceki hâlde varsa
+  /// 1-k, ikisinde de varsa 1.
+  double _agirlik<T>(T? onceki, T simdiki, T hedef) {
+    final yeni = simdiki == hedef;
+    final eski = _geciyor && onceki == hedef;
+    if (yeni && (eski || !_geciyor || onceki == null)) return 1;
+    return (yeni ? gecis : 0) + (eski ? 1 - gecis : 0);
+  }
+
+  /// Saydamlıkla çizer (1: doğrudan; 0: hiç çizmez).
+  static void _saydam(Canvas c, double a, void Function() ciz) {
+    if (a <= 0.01) return;
+    if (a >= 0.99) return ciz();
+    c.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: a));
+    ciz();
+    c.restore();
+  }
+
+  List<_Kol> _kollar() {
+    final yeni = _kodiPozKollari(cozulmusPoz(ifade, poz, elSalla), t);
+    final eskiPoz = oncekiPoz;
+    if (!_geciyor || eskiPoz == null) return yeni;
+    final eski = _kodiPozKollari(eskiPoz, t);
+    return [for (var i = 0; i < 2; i++) _Kol.karisim(eski[i], yeni[i], gecis)];
+  }
+
+  double _hareketleriUygula(Canvas c) {
+    final eski = oncekiHareket;
+    if (_geciyor && eski != null && eski != hareket) {
+      return _kodiHareketiUygula(c, eski, t, guc: 1 - gecis).golgeKucul +
+          _kodiHareketiUygula(c, hareket, t, guc: gecis).golgeKucul;
+    }
+    return _kodiHareketiUygula(c, hareket, t).golgeKucul;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1372,29 +1579,60 @@ class KodiRessami extends CustomPainter {
       final s = math.min(size.width / 100, size.height / 130);
       canvas.translate((size.width - 100 * s) / 2, (size.height - 130 * s) / 2);
       canvas.scale(s);
-      if (aynala) {
-        // 100 birimlik çizim alanı x = 50 çizgisine göre aynalanır.
-        canvas.translate(100, 0);
-        canvas.scale(-1, 1);
-      }
     }
     final sal = sadeceBas ? 0.0 : math.sin(t * 2 * math.pi) * 2.2;
+    final yon = _yon;
 
     if (!sadeceBas) {
-      // Gölge (salınmayla küçülüp büyür).
+      // Gölge (salınmayla, zıplarken daha çok küçülür).
+      canvas.save();
+      final golgeKucul = _hareketleriUygula(canvas);
+      canvas.restore();
       canvas.drawOval(
-          Rect.fromCenter(center: const Offset(50, 125), width: 46 - sal, height: 7),
+          Rect.fromCenter(
+              center: const Offset(50, 125),
+              width: math.max(18, 46 - sal - golgeKucul),
+              height: 7),
           Paint()..color = Colors.black.withValues(alpha: 0.22));
+      canvas.save();
+      if (yon != 1) {
+        // 100 birimlik çizim alanı x = 50 çizgisine göre aynalanır (yön
+        // değişirken robot kendi çevresinde döner).
+        canvas.translate(50, 0);
+        canvas.scale(yon, 1);
+        canvas.translate(-50, 0);
+      }
+      _hareketleriUygula(canvas);
     }
     canvas.save();
     canvas.translate(0, sal);
-    if (!sadeceBas) _govde(canvas);
+    final kollar = sadeceBas ? const <_Kol>[] : _kollar();
+    if (!sadeceBas) _govde(canvas, kollar.where((k) => !k.onde));
     _bas(canvas);
-    if (!sadeceBas && ifade == KodiIfadesi.dusunceli) _dusunmeKollari(canvas);
+    if (!sadeceBas) _kodiKollariCiz(canvas, kollar.where((k) => k.onde));
     canvas.restore();
-    if (ifade == KodiIfadesi.dusunceli && !sadeceBas) _dusunceBaloncuklari(canvas);
-    if (ifade == KodiIfadesi.dinliyor && !sadeceBas) _sesDalgalari(canvas, sal);
+    if (!sadeceBas) {
+      _saydam(canvas, _agirlik(oncekiIfade, ifade, KodiIfadesi.dusunceli),
+          () => _dusunceBaloncuklari(canvas));
+      _saydam(canvas, _agirlik(oncekiIfade, ifade, KodiIfadesi.dinliyor),
+          () => _sesDalgalari(canvas, sal));
+      canvas.restore();
+      // Efekt aynalanmaz ("?" ters dönmesin) ve robotla birlikte dönmez.
+      final eskiEfekt = oncekiEfekt;
+      if (_geciyor && eskiEfekt != null && eskiEfekt != efekt) {
+        _saydam(canvas, 1 - gecis, () => _kodiEfektiCiz(canvas, eskiEfekt, t));
+        _saydam(canvas, gecis, () => _kodiEfektiCiz(canvas, efekt, t));
+      } else {
+        _kodiEfektiCiz(canvas, efekt, t);
+      }
+    }
     canvas.restore();
+  }
+
+  /// Yatay yön (-1..1); dönerken çok incelmesin diye 0'a yakın değer atlanır.
+  double get _yon {
+    final y = ayna ?? (aynala ? -1.0 : 1.0);
+    return y.abs() < 0.08 ? 0.08 * (y < 0 ? -1 : 1) : y;
   }
 
   /// Göğüsteki "</>" yazısı bir kez ölçülür (her karede değil).
@@ -1409,7 +1647,7 @@ class KodiRessami extends CustomPainter {
     textDirection: TextDirection.ltr,
   )..layout();
 
-  void _govde(Canvas c) {
+  void _govde(Canvas c, Iterable<_Kol> arkaKollar) {
     final mor = Paint()..color = _kKodiMor;
     final morKoyu = Paint()..color = _kKodiMorKoyu;
     // Bacaklar ve ayaklar.
@@ -1419,35 +1657,8 @@ class KodiRessami extends CustomPainter {
     c.drawRRect(RRect.fromLTRBR(53, 109, 71, 118, const Radius.circular(5)), mor);
     // Boyun.
     c.drawRect(const Rect.fromLTRB(44, 58, 56, 68), morKoyu);
-    // Kollar (gövdenin arkasında başlar).
-    final kol = Paint()
-      ..color = _kKodiMor
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    // Düşünürken kollar gövdenin önündedir (bkz. _dusunmeKollari).
-    if (ifade == KodiIfadesi.dusunceli) {
-      // kollar sonra çizilir
-    } else {
-      // Sol kol: aşağıda, hafifçe sallanır.
-      final solEl = Offset(13, 93 + math.sin(t * 2 * math.pi) * 1.5);
-      c.drawLine(const Offset(26, 74), solEl, kol);
-      c.drawCircle(solEl, 5.5, Paint()..color = _kKodiPembe);
-    }
-    // Sağ kol: el sallar, yoksa aşağıda.
-    if (ifade == KodiIfadesi.dusunceli) {
-      // kollar sonra çizilir
-    } else if (elSalla) {
-      final aci = -1.25 + math.sin(t * 4 * math.pi) * 0.38;
-      const omuz = Offset(74, 74);
-      final el = omuz + Offset(math.cos(aci), math.sin(aci)) * 26;
-      c.drawLine(omuz, el, kol);
-      c.drawCircle(el, 5.5, Paint()..color = _kKodiPembe);
-    } else {
-      final el = Offset(87, 93 - math.sin(t * 2 * math.pi) * 1.5);
-      c.drawLine(const Offset(74, 74), el, kol);
-      c.drawCircle(el, 5.5, Paint()..color = _kKodiPembe);
-    }
+    // Gövdenin arkasındaki kollar.
+    _kodiKollariCiz(c, arkaKollar);
     // Gövde.
     final govde = RRect.fromLTRBR(24, 64, 76, 104, const Radius.circular(11));
     c.drawRRect(
@@ -1463,7 +1674,7 @@ class KodiRessami extends CustomPainter {
         Paint()..color = _kKodiEkran);
     final tp = _kodYazisi;
     c.save();
-    if (aynala) {
+    if (_yon < 0) {
       // Yazı aynalanmasın: x = 50 çevresinde yeniden çevrilir.
       c.translate(100, 0);
       c.scale(-1, 1);
@@ -1501,10 +1712,25 @@ class KodiRessami extends CustomPainter {
     // Yüz ekranı.
     c.drawRRect(RRect.fromLTRBR(25, 24, 75, 55, const Radius.circular(12)),
         Paint()..color = _kKodiEkran);
+    final eski = oncekiIfade;
+    if (_geciyor && eski != null && eski != ifade) {
+      // Yüzler birbirine karışarak değişir.
+      final onceki = KodiRessami(
+          ifade: eski, t: t, goz: goz, agiz: agiz, agizOynar: agizOynar, bakis: bakis);
+      _saydam(c, 1 - gecis, () => onceki._yuz(c));
+      _saydam(c, gecis, () => _yuz(c));
+    } else {
+      _yuz(c);
+    }
+  }
+
+  void _yuz(Canvas c) {
     // Yanaklar.
-    final yanak = Paint()..color = const Color(0xFFF472B6).withValues(alpha: 0.75);
-    c.drawCircle(const Offset(31, 47), 3.4, yanak);
-    c.drawCircle(const Offset(69, 47), 3.4, yanak);
+    final kizarik = ifade == KodiIfadesi.utangac || ifade == KodiIfadesi.sevgi;
+    final yanak = Paint()
+      ..color = const Color(0xFFF472B6).withValues(alpha: kizarik ? 0.95 : 0.75);
+    c.drawCircle(const Offset(31, 47), kizarik ? 4.6 : 3.4, yanak);
+    c.drawCircle(const Offset(69, 47), kizarik ? 4.6 : 3.4, yanak);
     _gozler(c);
     _agiz(c);
   }
@@ -1516,6 +1742,14 @@ class KodiRessami extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
+    // Bakış: gözler ekranın içinde kayar.
+    c.save();
+    c.translate(bakis.dx * 3.2, bakis.dy * 2.6);
+    _gozleriCiz(c, dolu, cizgi);
+    c.restore();
+  }
+
+  void _gozleriCiz(Canvas c, Paint dolu, Paint cizgi) {
     for (final x in const [40.0, 60.0]) {
       switch (ifade) {
         case KodiIfadesi.mutlu:
@@ -1564,7 +1798,102 @@ class KodiRessami extends CustomPainter {
               Rect.fromCenter(
                   center: Offset(x, 37), width: 10, height: math.max(1.5, 11 * goz)),
               dolu);
+        default:
+          _yeniGoz(c, x, dolu, cizgi);
       }
+    }
+  }
+
+  /// Yapay zekânın seçtiği yüzlerin gözleri (ve kaşları).
+  void _yeniGoz(Canvas c, double x, Paint dolu, Paint cizgi) {
+    final sol = x < 50;
+    final kasBoya = Paint()
+      ..color = _kKodiCamgobegi
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    void kapali() => c.drawLine(Offset(x - 4, 37), Offset(x + 4, 37), cizgi);
+    switch (ifade) {
+      case KodiIfadesi.heyecanli:
+        // Yıldız gözler, hafifçe parlar.
+        if (goz < 0.5) return kapali();
+        final p = 1 + 0.12 * math.sin(t * 2 * math.pi * 3);
+        c.drawPath(_yildizYolu(Offset(x, 37), 6 * p, ic: 0.5), dolu);
+      case KodiIfadesi.saskin:
+        c.drawOval(
+            Rect.fromCenter(center: Offset(x, 37), width: 10, height: math.max(1.5, 12 * goz)),
+            dolu);
+        if (goz > 0.5) {
+          c.drawCircle(Offset(x + 1.8, 34.5), 1.7, Paint()..color = Colors.white);
+        }
+        final kas = Path()
+          ..moveTo(x - 5, 28.5)
+          ..quadraticBezierTo(x, 25, x + 5, 28.5);
+        c.drawPath(kas, kasBoya);
+      case KodiIfadesi.kahkaha:
+        // > <  (sıkıca kapanmış, gülen gözler)
+        final y = sol ? -1.0 : 1.0;
+        final p = Path()
+          ..moveTo(x - 4 * y, 33)
+          ..lineTo(x + 3.5 * y, 37)
+          ..lineTo(x - 4 * y, 41);
+        c.drawPath(p, cizgi);
+      case KodiIfadesi.gozKirp:
+        if (sol || goz < 0.5) {
+          final p = Path()
+            ..moveTo(x - 5, 38)
+            ..quadraticBezierTo(x, 32, x + 5, 38);
+          c.drawPath(p, cizgi);
+        } else {
+          c.drawOval(Rect.fromCenter(center: Offset(x, 37), width: 9, height: 10), dolu);
+          c.drawCircle(Offset(x + 1.8, 35), 1.6, Paint()..color = Colors.white);
+        }
+      case KodiIfadesi.sevgi:
+        if (goz < 0.5) return kapali();
+        final p = 1 + 0.15 * math.max(0.0, math.sin(t * 2 * math.pi * 2));
+        c.drawPath(_kalpYolu(Offset(x, 37.5), 5.2 * p), Paint()..color = _kKodiPembe);
+      case KodiIfadesi.utangac:
+        // Aşağı ve yana bakan küçük gözler.
+        c.drawOval(
+            Rect.fromCenter(
+                center: Offset(x - 2, 39.5), width: 7, height: math.max(1.5, 6 * goz)),
+            dolu);
+      case KodiIfadesi.merakli:
+        // Bir göz kocaman, öbürü kısık; kaş kalkık.
+        c.drawOval(
+            Rect.fromCenter(
+                center: Offset(x + 2, sol ? 37.5 : 36.5),
+                width: sol ? 8 : 10,
+                height: math.max(1.5, (sol ? 6 : 11.5) * goz)),
+            dolu);
+        if (!sol) {
+          final kas = Path()
+            ..moveTo(x - 4, 28.5)
+            ..quadraticBezierTo(x + 1, 25, x + 6, 28);
+          c.drawPath(kas, kasBoya);
+        } else {
+          c.drawLine(Offset(x - 3, 31.5), Offset(x + 6, 31.5), kasBoya);
+        }
+      case KodiIfadesi.endiseli:
+        c.drawOval(
+            Rect.fromCenter(center: Offset(x, 38.5), width: 8, height: math.max(1.5, 9 * goz)),
+            dolu);
+        // İç uçları kalkık kaşlar.
+        c.drawLine(sol ? Offset(x - 5, 31.5) : Offset(x - 4, 28.5),
+            sol ? Offset(x + 4, 28.5) : Offset(x + 5, 31.5), kasBoya);
+      case KodiIfadesi.uykulu:
+        // Kapanmak üzere: aşağı kıvrık ince göz.
+        final p = Path()
+          ..moveTo(x - 5, 37)
+          ..quadraticBezierTo(x, 40.5, x + 5, 37);
+        c.drawPath(p, cizgi);
+      case KodiIfadesi.gururlu:
+        // Yarı kapalı, kendinden emin gözler.
+        c.drawOval(Rect.fromCenter(center: Offset(x, 38.5), width: 9, height: 8), dolu);
+        c.drawRect(Rect.fromLTRB(x - 6, 32, x + 6, 37.5), Paint()..color = _kKodiEkran);
+        c.drawLine(Offset(x - 5, 37.5), Offset(x + 5, 37.5), cizgi);
+      default:
+        break;
     }
   }
 
@@ -1574,11 +1903,69 @@ class KodiRessami extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.6
       ..strokeCap = StrokeCap.round;
+    if (agizOynar && ifade != KodiIfadesi.konusuyor) {
+      // Seçilen yüzle konuşur: ağız açılıp kapanır.
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: const Offset(50, 48), width: 11, height: 2.5 + 6 * agiz),
+              const Radius.circular(4)),
+          Paint()..color = _kKodiCamgobegi);
+      return;
+    }
+    final dolu = Paint()..color = _kKodiCamgobegi;
     switch (ifade) {
       case KodiIfadesi.mutlu:
+      case KodiIfadesi.sevgi:
         final p = Path()
           ..moveTo(42, 46)
           ..quadraticBezierTo(50, 53, 58, 46);
+        c.drawPath(p, cizgi);
+      case KodiIfadesi.heyecanli:
+      case KodiIfadesi.kahkaha:
+        // Kocaman açık gülen ağız.
+        final g = ifade == KodiIfadesi.kahkaha
+            ? 1 + 0.15 * math.sin(t * 2 * math.pi * 6)
+            : 1.0;
+        final p = Path()
+          ..moveTo(41, 45)
+          ..lineTo(59, 45)
+          ..quadraticBezierTo(50, 45 + 11 * g, 41, 45)
+          ..close();
+        c.drawPath(p, dolu);
+      case KodiIfadesi.saskin:
+        c.drawCircle(const Offset(50, 49), 3.2, cizgi);
+      case KodiIfadesi.gozKirp:
+        final p = Path()
+          ..moveTo(43, 47)
+          ..quadraticBezierTo(51, 52, 58, 44.5);
+        c.drawPath(p, cizgi);
+      case KodiIfadesi.utangac:
+        final p = Path()
+          ..moveTo(45.5, 49)
+          ..quadraticBezierTo(47.75, 47.2, 50, 49)
+          ..quadraticBezierTo(52.25, 50.8, 54.5, 49);
+        c.drawPath(p, cizgi);
+      case KodiIfadesi.merakli:
+        c.drawCircle(const Offset(53, 49), 2.2, cizgi);
+      case KodiIfadesi.endiseli:
+        final p = Path()
+          ..moveTo(43, 49.5)
+          ..lineTo(46.5, 47.5)
+          ..lineTo(50, 49.5)
+          ..lineTo(53.5, 47.5)
+          ..lineTo(57, 49.5);
+        c.drawPath(p, cizgi..strokeJoin = StrokeJoin.round);
+      case KodiIfadesi.uykulu:
+        // Esner.
+        final e = 0.5 + 0.5 * math.sin(t * 2 * math.pi);
+        c.drawOval(
+            Rect.fromCenter(center: const Offset(50, 49), width: 5 + e, height: 2.5 + 3 * e),
+            dolu);
+      case KodiIfadesi.gururlu:
+        final p = Path()
+          ..moveTo(41, 45.5)
+          ..quadraticBezierTo(51, 53.5, 60, 44);
         c.drawPath(p, cizgi);
       case KodiIfadesi.konusuyor:
         c.drawRRect(
@@ -1600,41 +1987,6 @@ class KodiRessami extends CustomPainter {
       case KodiIfadesi.dinliyor:
         c.drawCircle(const Offset(50, 48.5), 2.6, Paint()..color = _kKodiCamgobegi);
     }
-  }
-
-  /// Düşünme pozu: sağ elin dirseği sol elde, sağ el çenede (parmaklarıyla
-  /// çenesine hafifçe vurur). Kollar gövdenin ve başın önünde çizilir.
-  void _dusunmeKollari(Canvas c) {
-    final kol = Paint()
-      ..color = _kKodiMor
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final el = Paint()..color = _kKodiPembe;
-    final golge = Paint()
-      ..color = _kKodiMorKoyu
-      ..strokeWidth = 8.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final vurus = math.max(0.0, math.sin(t * 2 * math.pi * 3)) * 1.6;
-    // Sağ kol: omuzdan dirseğe (gövdenin önünde), dirsekten çeneye.
-    const sagOmuz = Offset(74, 75);
-    const dirsek = Offset(63, 95);
-    final cene = Offset(56.5, 63.5 - vurus);
-    // Sol kol: omuzdan gövdenin önüne, avucu sağ dirseğin altında.
-    const solOmuz = Offset(26, 75);
-    const solDirsek = Offset(31, 96);
-    const tutan = Offset(61, 99);
-    // Kolları birbirinden ayırmak için koyu kenar.
-    for (final (a, b) in [(sagOmuz, dirsek), (dirsek, cene), (solOmuz, solDirsek), (solDirsek, tutan)]) {
-      c.drawLine(a, b, golge);
-    }
-    c.drawLine(sagOmuz, dirsek, kol);
-    c.drawLine(solOmuz, solDirsek, kol);
-    c.drawLine(solDirsek, tutan, kol);
-    c.drawCircle(tutan, 5.5, el);
-    c.drawLine(dirsek, cene, kol);
-    c.drawCircle(cene, 5.5, el);
   }
 
   /// Dinlerken kulağın yanında beliren ses dalgaları.
@@ -1669,16 +2021,13 @@ class KodiRessami extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(KodiRessami e) =>
-      e.ifade != ifade ||
-      e.t != t ||
-      e.goz != goz ||
-      e.agiz != agiz ||
-      e.elSalla != elSalla ||
-      e.aynala != aynala;
+  bool shouldRepaint(KodiRessami e) => true;
 }
 
-/// Canlı Kodi: salınır, göz kırpar, konuşurken ağzı oynar.
+/// Canlı Kodi: salınır, göz kırpar, konuşurken ağzı oynar. Hâli değişince
+/// yeni hâle yumuşakça geçer; [gosteri] verilince (sayaç [gosteriNo]
+/// değiştikçe) kısa bir gösteri yapar; [kipirdan] açıksa boşta dururken arada
+/// bir kendi kendine kıpırdanır (etrafa bakınır, gerinir, dans eder ...).
 class KodiRobotu extends StatefulWidget {
   final KodiIfadesi ifade;
   final bool elSalla;
@@ -1686,26 +2035,81 @@ class KodiRobotu extends StatefulWidget {
 
   /// Düşünme pozu sola dönük çizilsin mi (pencerenin ortası soldaysa).
   final bool solaBak;
+
+  /// Yapay zekânın seçtiği poz, hareket ve efekt (bkz. kodi_ifade.dart).
+  final KodiPozu poz;
+  final KodiHareketi hareket;
+  final KodiEfekti efekt;
+
+  /// Konuşuyor: [ifade] konuşma yüzü değilse de ağzı oynar.
+  final bool konusuyor;
+
+  /// Bir kez oynayan gösteri; [gosteriNo] her arttığında yeniden oynar.
+  final KodiGosterisi? gosteri;
+  final int gosteriNo;
+
+  /// Boşta kıpırdanabilir mi?
+  final bool kipirdan;
   const KodiRobotu(
       {super.key,
       this.ifade = KodiIfadesi.mutlu,
       this.elSalla = false,
       this.boy = 120,
-      this.solaBak = false});
+      this.solaBak = false,
+      this.poz = KodiPozu.normal,
+      this.hareket = KodiHareketi.yok,
+      this.efekt = KodiEfekti.yok,
+      this.konusuyor = false,
+      this.gosteri,
+      this.gosteriNo = 0,
+      this.kipirdan = false});
   @override
   State<KodiRobotu> createState() => _KodiRobotuState();
+}
+
+/// Kodi'nin bir andaki görünüşü (geçişin iki ucu).
+@immutable
+class _Gorunus {
+  final KodiIfadesi ifade;
+  final KodiPozu poz;
+  final KodiHareketi hareket;
+  final KodiEfekti efekt;
+  final double ayna;
+  const _Gorunus(this.ifade, this.poz, this.hareket, this.efekt, this.ayna);
+
+  @override
+  bool operator ==(Object o) =>
+      o is _Gorunus &&
+      o.ifade == ifade &&
+      o.poz == poz &&
+      o.hareket == hareket &&
+      o.efekt == efekt &&
+      o.ayna == ayna;
+
+  @override
+  int get hashCode => Object.hash(ifade, poz, hareket, efekt, ayna);
 }
 
 class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
   // Hareket zamanı (0-1, 2,6 sn'de bir döner). Ekran her karede (60/sn) değil,
   // daha seyrek çizilir: Flutter'da tek bir şey kıpırdasa bile bütün pencere
   // yeniden birleştirilir; Kodi'nin hafif salınması için 60 kare gereksiz.
-  //  - konuşurken / düşünürken / dinlerken / el sallarken: 24 kare/sn
+  //  - konuşurken / düşünürken / dinlerken / el sallarken / geçişte: 24 kare/sn
   //  - boşta: 12 kare/sn; uzun süre bir şey olmazsa salınma durur.
   static const _devir = 2600;
   static const _etkinAralik = Duration(milliseconds: 42);
   static const _bostaAralik = Duration(milliseconds: 83);
   static const _dinlenmeSuresi = Duration(seconds: 20);
+
+  /// Hâller arası geçişin süresi.
+  static const gecisSuresi = Duration(milliseconds: 420);
+
+  /// Kıpırdanmalar arası bekleme (en az, rastgele ek) ve bir şey olmadan en
+  /// çok kaç kez kıpırdanacağı (sonra dinlenir; bilgisayarı yormasın).
+  static const _kipirtiBekleme = Duration(seconds: 9);
+  static const _kipirtiEk = 9000;
+  static const _enCokKipirti = 8;
+
   final _zaman = ValueNotifier<double>(0);
   final _saat = Stopwatch()..start();
   Timer? _zamanZamanlayici;
@@ -1717,22 +2121,131 @@ class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
   Timer? _kirpZamanlayici;
   final _rastgele = math.Random();
 
-  bool get _etkin => widget.ifade != KodiIfadesi.mutlu || widget.elSalla;
+  late final AnimationController _gecis =
+      AnimationController(vsync: this, duration: gecisSuresi, value: 1);
+  late _Gorunus _hedef;
+  _Gorunus? _onceki;
+
+  late final AnimationController _gosteriAnim = AnimationController(vsync: this);
+  KodiGosterisi? _gosteri;
+
+  _Kipirti? _kipirti;
+  _Kipirti? _sonKipirti;
+  DateTime _kipirtiBasi = DateTime.now();
+  Timer? _kipirtiZamanlayici;
+  int _kipirtiSayisi = 0;
+
+  bool get _etkin =>
+      (widget.ifade != KodiIfadesi.mutlu && widget.ifade != KodiIfadesi.uykulu) ||
+      widget.elSalla ||
+      widget.konusuyor ||
+      widget.poz != KodiPozu.normal ||
+      widget.hareket != KodiHareketi.yok ||
+      (widget.efekt != KodiEfekti.yok && widget.efekt != KodiEfekti.zzz) ||
+      _gecis.isAnimating ||
+      _gosteri != null ||
+      _kipirti != null;
+
+  /// Şu an görünmesi gereken hâl: verilen hâl, üstüne sürmekte olan gösteri
+  /// ya da kıpırtı.
+  _Gorunus _gorunusHesapla() {
+    final ek = _gosteri?.hal ?? _kipirti?.hal;
+    final ifade = ek?.yuz ?? widget.ifade;
+    final poz = KodiRessami.cozulmusPoz(ifade, ek?.poz ?? widget.poz, widget.elSalla);
+    return _Gorunus(
+      ifade,
+      poz,
+      ek?.hareket ?? widget.hareket,
+      ek?.efekt ?? widget.efekt,
+      // Düşünme pozu pencerenin ortasına dönük.
+      widget.solaBak && poz == KodiPozu.dusun ? -1 : 1,
+    );
+  }
+
+  /// Görünmesi gereken hâl değiştiyse yumuşak geçişi başlatır.
+  void _hedefiGuncelle() {
+    final yeni = _gorunusHesapla();
+    if (yeni == _hedef) return;
+    // Geçiş yarıdan fazla ilerlemediyse eski hâlden devam edilir.
+    if (!_gecis.isAnimating || _gecis.value >= 0.5 || _onceki == null) _onceki = _hedef;
+    _hedef = yeni;
+    _gecis.forward(from: 0);
+    _sonEtkinlik = DateTime.now();
+    _hiziAyarla();
+  }
 
   @override
   void initState() {
     super.initState();
+    _hedef = _gorunusHesapla();
+    _gecis.addStatusListener((d) {
+      if (d == AnimationStatus.completed) _hiziAyarla();
+    });
     _kirpmayiKur();
     _hiziAyarla();
+    _kipirtiyiKur();
+    if (widget.gosteri != null && widget.gosteriNo > 0) _gosteriyiBaslat(widget.gosteri!);
   }
 
   @override
   void didUpdateWidget(KodiRobotu eski) {
     super.didUpdateWidget(eski);
-    if (eski.ifade != widget.ifade || eski.elSalla != widget.elSalla) {
+    final degisti = eski.ifade != widget.ifade ||
+        eski.elSalla != widget.elSalla ||
+        eski.konusuyor != widget.konusuyor ||
+        eski.poz != widget.poz ||
+        eski.hareket != widget.hareket ||
+        eski.efekt != widget.efekt ||
+        eski.solaBak != widget.solaBak;
+    if (degisti) {
       _sonEtkinlik = DateTime.now();
-      _hiziAyarla();
+      _kipirtiSayisi = 0;
+      // Kodi'ye bir şey olunca kıpırtı yarıda kalır.
+      if (_kipirti != null && !widget.kipirdan) _kipirti = null;
     }
+    if (eski.gosteriNo != widget.gosteriNo && widget.gosteri != null) {
+      _gosteriyiBaslat(widget.gosteri!);
+    }
+    if (eski.kipirdan != widget.kipirdan || degisti) _kipirtiyiKur();
+    _hedefiGuncelle();
+    _hiziAyarla();
+  }
+
+  void _gosteriyiBaslat(KodiGosterisi g) {
+    _gosteri = g;
+    _kipirti = null;
+    _gosteriAnim.duration = g.sure;
+    _gosteriAnim.forward(from: 0).whenCompleteOrCancel(() {
+      if (!mounted || _gosteri != g) return;
+      setState(() => _gosteri = null);
+      _hedefiGuncelle();
+    });
+    _hedefiGuncelle();
+  }
+
+  void _kipirtiyiKur() {
+    _kipirtiZamanlayici?.cancel();
+    if (!widget.kipirdan || _kipirtiSayisi >= _enCokKipirti) return;
+    _kipirtiZamanlayici = Timer(
+        _kipirtiBekleme + Duration(milliseconds: _rastgele.nextInt(_kipirtiEk)), () {
+      if (!mounted) return;
+      if (!widget.kipirdan || _gosteri != null || _kipirti != null) return _kipirtiyiKur();
+      final secenekler = [for (final k in _kKipirtilar) if (k != _sonKipirti) k];
+      final k = secenekler[_rastgele.nextInt(secenekler.length)];
+      setState(() {
+        _kipirti = k;
+        _sonKipirti = k;
+        _kipirtiBasi = DateTime.now();
+        _kipirtiSayisi++;
+      });
+      _hedefiGuncelle();
+      _kipirtiZamanlayici = Timer(k.sure, () {
+        if (!mounted) return;
+        if (_kipirti == k) setState(() => _kipirti = null);
+        _hedefiGuncelle();
+        _kipirtiyiKur();
+      });
+    });
   }
 
   void _hiziAyarla() {
@@ -1748,6 +2261,8 @@ class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
         _zamanZamanlayici = null;
         return;
       }
+      if (_etkin) _sonEtkinlik = DateTime.now();
+      if (!_etkin && _aralik == _etkinAralik) _hiziAyarla();
       _zaman.value = (_saat.elapsedMilliseconds % _devir) / _devir;
     });
   }
@@ -1767,8 +2282,11 @@ class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
   void dispose() {
     _kirpZamanlayici?.cancel();
     _zamanZamanlayici?.cancel();
+    _kipirtiZamanlayici?.cancel();
     _zaman.dispose();
     _kirp.dispose();
+    _gecis.dispose();
+    _gosteriAnim.dispose();
     super.dispose();
   }
 
@@ -1780,23 +2298,59 @@ class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
       width: widget.boy * 100 / 130,
       height: widget.boy,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_zaman, _kirp]),
+        animation: Listenable.merge([_zaman, _kirp, _gecis, _gosteriAnim]),
         builder: (context, _) {
           final t = _zaman.value;
+          final h = _hedef;
+          final o = _onceki;
+          final k = Curves.easeInOutCubic.transform(_gecis.value);
+          final konusuyor = h.ifade == KodiIfadesi.konusuyor || widget.konusuyor;
           // Konuşurken ağız saniyede ~6 kez açılıp kapanır.
-          final agiz = widget.ifade == KodiIfadesi.konusuyor
+          final agiz = konusuyor
               ? (0.5 + 0.5 * math.sin(t * 2 * math.pi * 15)).clamp(0.0, 1.0)
               : 0.0;
-          return CustomPaint(
+          final kipirti = _kipirti;
+          final bakis = kipirti?.bakis == null
+              ? Offset.zero
+              : kipirti!.bakis!((DateTime.now().difference(_kipirtiBasi).inMilliseconds /
+                      kipirti.sure.inMilliseconds)
+                  .clamp(0.0, 1.0));
+          Widget cizim = CustomPaint(
+            size: Size.infinite,
             painter: KodiRessami(
-              ifade: widget.ifade,
+              ifade: h.ifade,
               t: t,
               goz: 1 - _kirp.value,
               agiz: agiz,
-              elSalla: widget.elSalla,
-              aynala: widget.solaBak && widget.ifade == KodiIfadesi.dusunceli,
+              poz: h.poz,
+              hareket: h.hareket,
+              efekt: h.efekt,
+              agizOynar: widget.konusuyor && h.ifade != KodiIfadesi.konusuyor,
+              oncekiIfade: o?.ifade,
+              oncekiPoz: o?.poz,
+              oncekiHareket: o?.hareket,
+              oncekiEfekt: o?.efekt,
+              gecis: _gecis.isAnimating ? k : 1,
+              ayna: o == null || !_gecis.isAnimating ? h.ayna : o.ayna + (h.ayna - o.ayna) * k,
+              bakis: bakis,
             ),
           );
+          final g = _gosteri;
+          if (g != null) {
+            final d = g.duzen(_gosteriAnim.value);
+            cizim = Opacity(
+              opacity: d.saydam.clamp(0.0, 1.0),
+              child: Transform(
+                alignment: Alignment.bottomCenter,
+                transform: Matrix4.identity()
+                  ..translate(0.0, d.dy * widget.boy)
+                  ..rotateZ(d.donus)
+                  ..scale(d.sx, d.sy),
+                child: cizim,
+              ),
+            );
+          }
+          return cizim;
         },
       ),
      ),
@@ -1858,6 +2412,18 @@ class _KodiKatmaniState extends State<KodiKatmani>
   bool _elSalla = false;
   Timer? _zamanlayici;
 
+  /// Sürmekte olan gösteri (gelme, gitme, yere inme ...); sayaç her
+  /// gösteride artar ki aynı gösteri art arda da oynasın.
+  KodiGosterisi? _gosteri;
+  int _gosteriNo = 0;
+  void _gosteriYap(KodiGosterisi g) => setState(() {
+        _gosteri = g;
+        _gosteriNo++;
+      });
+
+  /// Masaüstüne çıkarken dönerek küçülüp kaybolur (kayarak gitmez).
+  bool _isinlaniyor = false;
+
   /// Sürüklenirken robotun sol üst köşesi.
   Offset? _surukle;
   Offset _surukleBaslangic = Offset.zero;
@@ -1895,20 +2461,80 @@ class _KodiKatmaniState extends State<KodiKatmani>
 
   /// Ana pencere: tarayıcı sayfası ayrı bir pencerede çizildiği için Kodi'nin
   /// (robot ve balon) olduğu yerler o pencereden kesilir; Kodi sayfanın
-  /// üstünde görünür kalır.
+  /// üstünde görünür kalır. Balon yuvarlak köşeli kutusuyla, robot ise
+  /// yalnızca çizildiği yerlerle (silüeti) kesilir: eskiden robotun bütün
+  /// kutusu kesiliyor, çevresindeki boşlukta sayfanın 1,5 sn'de bir alınan,
+  /// bayat ve birkaç piksel kaymış görüntüsü görünüyordu.
   Timer? _tarayiciZamanlayici;
   void _tarayiciyaBildir() {
     if (!mounted || !kTarayici.hazir) return;
-    final ogeler = <Rect>[];
-    if (_kodi.acik && !_kodi.masaustunde) {
-      for (final anahtar in [_robotAnahtari, _balonAnahtari]) {
-        final kutu = anahtar.currentContext?.findRenderObject();
-        if (kutu is! RenderBox || !kutu.hasSize || !kutu.attached) continue;
-        final o = kutu.localToGlobal(Offset.zero);
-        ogeler.add((o & kutu.size).inflate(1));
+    final balon = <Rect>[];
+    var robot = <Rect>[];
+    // Giderken (el sallarken, ışınlanırken) de sayfanın üstünde görünür.
+    if (!_kayma.isDismissed) {
+      final b = _balonAnahtari.currentContext?.findRenderObject();
+      if (b is RenderBox && b.hasSize && b.attached) {
+        balon.add((b.localToGlobal(Offset.zero) & b.size).inflate(1));
       }
+      final r = _robotAnahtari.currentContext?.findRenderObject();
+      if (r is RenderBox && r.hasSize && r.attached) {
+        final kutu = (r.localToGlobal(Offset.zero) & r.size).inflate(1);
+        // Robot yer değiştirirken (kayarak gelip giderken, sürüklenirken)
+        // silüet geriden gelir: o sırada bütün kutu kesilir.
+        final yerDegisiyor = _kayma.isAnimating || _surukle != null;
+        if (yerDegisiyor || _siluet.isEmpty || !kTarayici.sayfaGorunur) {
+          robot = [kutu];
+        } else {
+          robot = [..._siluet, ..._oncekiSiluet];
+        }
+        if (kTarayici.sayfaGorunur && !yerDegisiyor) _siluetiGuncelle();
+      }
+    } else {
+      _siluet = const [];
+      _oncekiSiluet = const [];
     }
-    kTarayici.ustOgeleriBildir(ogeler);
+    kTarayici.ustOgeleriBildir(balon, keskin: robot);
+  }
+
+  /// Robotun son iki silüeti (genel, mantıksal piksel). İkisinin birleşimi
+  /// kesilir: robot kıpırdarken arada kalan yerler de açıkta kalmasın.
+  List<Rect> _siluet = const [];
+  List<Rect> _oncekiSiluet = const [];
+  bool _siluetAliniyor = false;
+
+  Future<void> _siluetiGuncelle() async {
+    if (_siluetAliniyor) return;
+    _siluetAliniyor = true;
+    try {
+      final rb = _cizimSiniri(_robotAnahtari.currentContext?.findRenderObject());
+      if (rb == null || !rb.attached || !rb.hasSize) return;
+      const olcek = 0.5;
+      final resim = rb.toImageSync(pixelRatio: olcek);
+      final w = resim.width, h = resim.height;
+      final veri = await resim.toByteData(format: ui.ImageByteFormat.rawRgba);
+      resim.dispose();
+      if (veri == null || !mounted || !rb.attached) return;
+      final donusum = rb.getTransformTo(null);
+      final yeni = [
+        for (final p in kodiSilueti(veri.buffer.asUint8List(), w, h, hucre: 1 / olcek))
+          MatrixUtils.transformRect(donusum, p),
+      ];
+      _oncekiSiluet = _siluet;
+      _siluet = yeni;
+    } catch (_) {
+      // Görüntü alınamadı (çizim sürüyordu ...): sonraki turda yeniden.
+    } finally {
+      _siluetAliniyor = false;
+    }
+  }
+
+  /// Robotun çizim katmanı (KodiRobotu'nun RepaintBoundary'si).
+  static RenderRepaintBoundary? _cizimSiniri(RenderObject? kok) {
+    if (kok == null) return null;
+    if (kok is RenderRepaintBoundary) return kok;
+    RenderRepaintBoundary? bulunan;
+    kok.visitChildren((c) => bulunan ??= _cizimSiniri(c));
+    return bulunan;
   }
 
   /// Sürüklenirken robotun sınırlanmamış yeri: pencerenin dışına taşarsa
@@ -1924,6 +2550,8 @@ class _KodiKatmaniState extends State<KodiKatmani>
     _kodi.addListener(_kodiDegisti);
     // Kodi masaüstündeyken de sorular bağlamla cevaplansın, işler yapılsın.
     _kodi.dusunmeOku = () => context.read<SettingsProvider>().getBool('kodi_dusunme');
+    _kodi.goruntuKipiOku = () =>
+        context.read<SettingsProvider>().getString(kKodiGoruntu, fallback: 'kapali');
     _kodi.sesliOku = () => context.read<SettingsProvider>().getBool('kodi_sesli');
     if (!widget.pencereKipi) {
       _kodi.baglamUret = () => kodiBaglami(context);
@@ -1975,9 +2603,21 @@ class _KodiKatmaniState extends State<KodiKatmani>
     setState(() {
       _vardi = false;
       _elSalla = true;
+      _isinlaniyor = false;
     });
-    _kayma.forward().then((_) {
+    // Masaüstü penceresinde kayarak değil, pıt diye belirerek gelir.
+    final Future<void> geldi;
+    if (widget.pencereKipi) {
+      _kayma.value = 1;
+      _gosteriYap(KodiGosterisi.belir);
+      geldi = Future<void>.delayed(const Duration(milliseconds: 450));
+    } else {
+      geldi = _kayma.forward().orCancel.catchError((_) {});
+    }
+    geldi.then((_) {
       if (!mounted || !_kodi.acik) return;
+      // Kayarak gelince zıplayıp yere yaylanarak iner.
+      if (!widget.pencereKipi) _gosteriYap(KodiGosterisi.gel);
       setState(() => _vardi = true);
       // Selam, balon kurulduktan sonra gelir ki harf harf yazılsın.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1993,9 +2633,29 @@ class _KodiKatmaniState extends State<KodiKatmani>
   void _git() {
     _zamanlayici?.cancel();
     setState(() => _elSalla = false);
-    // Balon robotla birlikte kayarak gider; kayma bitince kaldırılır.
-    _kayma.reverse().then((_) {
-      if (mounted && !_kodi.acik) setState(() => _vardi = false);
+    if (_kodi.masaustunde) {
+      // Masaüstüne çıktı: burada dönerek küçülüp kaybolur, masaüstünde
+      // belirir.
+      setState(() {
+        _vardi = false;
+        _isinlaniyor = true;
+      });
+      _gosteriYap(KodiGosterisi.masaustuneCik);
+      _zamanlayici = Timer(KodiGosterisi.masaustuneCik.sure, () {
+        if (!mounted || _kodi.acik) return;
+        _kayma.value = 0;
+        setState(() => _isinlaniyor = false);
+      });
+      return;
+    }
+    // Önce göz kırpıp el sallar, sonra balonla birlikte kayarak gider;
+    // kayma bitince kaldırılır.
+    _gosteriYap(KodiGosterisi.git);
+    _zamanlayici = Timer(KodiGosterisi.git.sure, () {
+      if (!mounted || _kodi.acik) return;
+      _kayma.reverse().then((_) {
+        if (mounted && !_kodi.acik) setState(() => _vardi = false);
+      });
     });
   }
 
@@ -2138,6 +2798,7 @@ class _KodiKatmaniState extends State<KodiKatmani>
                     _kesir = yeni;
                     _varsayilanaDondu = false;
                   });
+                  _gosteriYap(KodiGosterisi.yereIn);
                   _konumuKaydet(yeni);
                 };
                 // Sürükleme yarıda kesilirse (pencere odağı gitti ...) Kodi
@@ -2173,7 +2834,12 @@ class _KodiKatmaniState extends State<KodiKatmani>
               duration: const Duration(milliseconds: 150),
               child: _KodiCanli(
                   boy: rh,
-                  elSalla: _elSalla || _surukle != null,
+                  elSalla: _elSalla,
+                  surukleniyor: _surukle != null,
+                  disarida: _disarida && _surukle != null,
+                  cikiyor: cikiyor || _isinlaniyor,
+                  gosteri: _gosteri,
+                  gosteriNo: _gosteriNo,
                   // Düşünürken pencerenin ortasına bakar (eskiden hep sağa
                   // bakıyor, sağ köşedeyken duvara dönüyordu). Masaüstünde
                   // TürKod'un yeri bilinmez: balonuna bakar.
@@ -2281,37 +2947,180 @@ class _KodiKatmaniState extends State<KodiKatmani>
   }
 }
 
-/// Sohbetin durumuna göre ifadesi değişen robot.
-class _KodiCanli extends StatelessWidget {
+/// Sohbetin durumuna ve yapay zekânın seçtiği hâle göre ifadesi değişen
+/// robot. Öncelik: dinliyor > cevap bekliyor (düşünür) > yapay zekânın
+/// seçtiği hâl (cevap yazılırken ve ardından [halSuresi]) > hata (üzgün) >
+/// uyuklama (uzun süre bir şey olmazsa) > konuşma / mutlu.
+class _KodiCanli extends StatefulWidget {
   final double boy;
   final bool elSalla;
   final bool solaBak;
-  const _KodiCanli({required this.boy, required this.elSalla, this.solaBak = false});
+
+  /// Sürükleniyor (havada şaşkın), pencerenin dışına taşıyor (sevinçli),
+  /// masaüstüne çıkıyor (heyecanla zıplar).
+  final bool surukleniyor;
+  final bool disarida;
+  final bool cikiyor;
+
+  /// Bir kez oynayan gösteri (gelme, gitme, yere inme ...).
+  final KodiGosterisi? gosteri;
+  final int gosteriNo;
+  const _KodiCanli(
+      {required this.boy,
+      required this.elSalla,
+      this.solaBak = false,
+      this.surukleniyor = false,
+      this.disarida = false,
+      this.cikiyor = false,
+      this.gosteri,
+      this.gosteriNo = 0});
+
+  /// Cevap yazılıp bittikten sonra seçilen hâlde kalma süresi.
+  static const halSuresi = Duration(seconds: 6);
+
+  /// Bu kadar süre hiçbir şey olmazsa Kodi uyuklar.
+  static const uykuSuresi = Duration(minutes: 2);
+
+  @override
+  State<_KodiCanli> createState() => _KodiCanliState();
+}
+
+class _KodiCanliState extends State<_KodiCanli> {
+  KodiMesaji? _halMesaji;
+  bool _halBitti = true;
+  Timer? _halZamanlayici;
+  Timer? _uykuZamanlayici;
+  bool _uyuyor = false;
+  String _sonDurum = '';
+
+  @override
+  void dispose() {
+    _halZamanlayici?.cancel();
+    _uykuZamanlayici?.cancel();
+    super.dispose();
+  }
+
+  void _halSuresiniKur(bool konusuyor) {
+    if (_halBitti || konusuyor) {
+      _halZamanlayici?.cancel();
+      _halZamanlayici = null;
+      return;
+    }
+    _halZamanlayici ??= Timer(_KodiCanli.halSuresi, () {
+      if (!mounted) return;
+      setState(() {
+        _halBitti = true;
+        _halZamanlayici = null;
+      });
+    });
+  }
+
+  /// Sohbette bir şey değiştikçe uyku sayacı baştan başlar.
+  void _uykuyuKur(String durum) {
+    if (durum == _sonDurum && _uykuZamanlayici != null) return;
+    _sonDurum = durum;
+    _uyuyor = false;
+    _uykuZamanlayici?.cancel();
+    _uykuZamanlayici = Timer(_KodiCanli.uykuSuresi, () {
+      if (mounted) setState(() => _uyuyor = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final k = context.watch<KodiProvider>();
     final yaziyor = context.watch<_KodiYaziDurumu>().yaziyor;
     final son = k.mesajlar.isEmpty ? null : k.mesajlar.last;
-    final ifade = k.dinliyor
-        ? KodiIfadesi.dinliyor
-        // Cevap beklenirken ("Düşünüyorum" / "Hemen bakıyorum") Kodi konuşmaz,
-        // düşünür: eli çenesinde, ağzı oynamaz.
-        : k.bekliyor
-        ? KodiIfadesi.dusunceli
-        : yaziyor || k.konusuyor
-            ? KodiIfadesi.konusuyor
-            : (son != null && son.kodiden && son.hata)
-                ? KodiIfadesi.uzgun
-                : KodiIfadesi.mutlu;
+    final konusuyor = yaziyor || k.konusuyor;
+    // Yeni cevabın hâli: cevap yazılırken ve ardından bir süre görünür.
+    if (son != null && !identical(son, _halMesaji)) {
+      _halMesaji = son;
+      _halBitti = !(son.kodiden && son.ifade != null);
+      _halZamanlayici?.cancel();
+      _halZamanlayici = null;
+    }
+    _halSuresiniKur(konusuyor);
+    final mesgul = k.dinliyor ||
+        k.bekliyor ||
+        konusuyor ||
+        widget.elSalla ||
+        widget.surukleniyor ||
+        widget.cikiyor;
+    _uykuyuKur('${k.mesajlar.length}|$mesgul|${son?.metin.length}');
+    final hal = (!_halBitti && !k.dinliyor && !k.bekliyor) ? _halMesaji?.ifade : null;
+    final uyku = _uyuyor && !mesgul && hal == null;
+
+    final KodiIfadesi ifade;
+    if (k.dinliyor) {
+      ifade = KodiIfadesi.dinliyor;
+    } else if (k.bekliyor) {
+      // Cevap beklenirken ("Düşünüyorum" / "Hemen bakıyorum") Kodi konuşmaz,
+      // düşünür: eli çenesinde, ağzı oynamaz.
+      ifade = KodiIfadesi.dusunceli;
+    } else if (hal?.yuz != null) {
+      ifade = hal!.yuz!;
+    } else if (konusuyor) {
+      ifade = KodiIfadesi.konusuyor;
+    } else if (son != null && son.kodiden && son.hata) {
+      ifade = KodiIfadesi.uzgun;
+    } else if (uyku) {
+      ifade = KodiIfadesi.uykulu;
+    } else {
+      ifade = KodiIfadesi.mutlu;
+    }
+    // Sürüklenirken havada şaşırır, kollarını açar, ayaklarını sallar;
+    // pencerenin dışına taşınca ya da masaüstüne çıkarken heyecanlanır.
+    final tasiniyor = widget.surukleniyor || widget.cikiyor;
     final robot = KodiRobotu(
-        ifade: ifade, elSalla: elSalla && !k.bekliyor, boy: boy, solaBak: solaBak);
+      ifade: tasiniyor
+          ? (widget.disarida || widget.cikiyor ? KodiIfadesi.heyecanli : KodiIfadesi.saskin)
+          : ifade,
+      elSalla: widget.elSalla && !k.bekliyor && !tasiniyor,
+      boy: widget.boy,
+      solaBak: widget.solaBak,
+      // Seçilen yüzle konuşurken ağzı oynar.
+      konusuyor: konusuyor && hal?.yuz != null && !k.dinliyor && !k.bekliyor && !tasiniyor,
+      // Selamlaşırken el sallamak seçilen pozdan önce gelir.
+      poz: tasiniyor
+          ? KodiPozu.zafer
+          : widget.elSalla
+              ? KodiPozu.normal
+              : (hal?.poz ?? KodiPozu.normal),
+      hareket: widget.cikiyor
+          ? KodiHareketi.zipla
+          : widget.surukleniyor
+              ? KodiHareketi.salla
+              : hal?.hareket ?? KodiHareketi.yok,
+      efekt: widget.disarida || widget.cikiyor
+          ? KodiEfekti.yildizlar
+          : widget.surukleniyor
+              ? KodiEfekti.unlem
+              : hal?.efekt ?? (uyku ? KodiEfekti.zzz : KodiEfekti.yok),
+      gosteri: widget.gosteri,
+      gosteriNo: widget.gosteriNo,
+      // Boşta dururken arada bir kendi kendine kıpırdanır.
+      kipirdan: !mesgul &&
+          hal == null &&
+          !uyku &&
+          !(son != null && son.kodiden && son.hata) &&
+          k.acik,
+    );
     // Masaüstü penceresinde ipucu baloncuğu tıklanabilir alanın dışına taşar.
     if (k.pencereKipi) return robot;
-    return Tooltip(
-      message: 'Kodi: üstüne basıp sürükleyerek taşıyabilirsin, '
-          'çift tıklayınca yerine döner',
-      waitDuration: const Duration(milliseconds: 1200),
+    // Tarayıcı sayfası ayrı bir pencerede, Flutter'ın üstünde çizilir: ipucu
+    // baloncuğu sayfanın altında kalıp yarısı kesik görünüyordu. Sayfa
+    // görünürken ipucu çıkmaz (ağaç aynı kalır ki robotun animasyonu
+    // sıfırlanmasın).
+    return ListenableBuilder(
+      listenable: kTarayici,
+      builder: (context, cocuk) => Tooltip(
+        message: 'Kodi: üstüne basıp sürükleyerek taşıyabilirsin, '
+            'çift tıklayınca yerine döner',
+        waitDuration: kTarayici.sayfaGorunur
+            ? const Duration(days: 1)
+            : const Duration(milliseconds: 1200),
+        child: cocuk,
+      ),
       child: robot,
     );
   }
@@ -2535,7 +3344,7 @@ class _KodiBalonuState extends State<_KodiBalonu> {
       baloncuklar.add(m.kodiden
           ? _KodiSozu(
               mesaj: m,
-              metin: buMu ? m.metin.substring(0, _harf) : m.metin,
+              metin: buMu ? kodiYarimMetin(m.metin, _harf) : m.metin,
               imlec: yaziliyor,
               kodSekmesiVar: _kodSekmesiVar,
               onIzin: _uygula,
@@ -3366,7 +4175,7 @@ class _KodiDusunuyorState extends State<_KodiDusunuyor> {
         Icon(widget.dusunme ? Icons.psychology_alt_outlined : Icons.bolt_rounded,
             size: 16, color: _kKodiCamgobegiKoyu),
         const SizedBox(width: 6),
-        Text('${_yazi.substring(0, math.min(_harf, _yazi.length))}$noktalar',
+        Text('${kodiYarimMetin(_yazi, _harf)}$noktalar',
             style: TextStyle(
                 fontSize: 13.5,
                 fontStyle: FontStyle.italic,

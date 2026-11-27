@@ -232,6 +232,8 @@ class _PencereGizleyici:
         self._dur = False
         self._islenen = set()
         self._is = None
+        if not platform_katmani.windows_mu():
+            return   # Linux/macOS: pencereler SDL dummy ile hiç açılmaz
         try:
             import ctypes
             from ctypes import wintypes

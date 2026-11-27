@@ -457,6 +457,10 @@ Future<bool> kodiYonetimEylemi(BuildContext context, KodiEylemi e) async {
 /// öğeye gidip tıklar ya da yazar. "devam": sayfa açılınca Kodi yeni sayfayı
 /// görüp işine kendisi devam eder (iş bitene kadar).
 Future<String> kodiTarayiciEylemi(BuildContext context, KodiEylemi e) async {
+  // Linux'ta IDE içinde tarayıcı yok: site ve arama bilgisayarın kendi
+  // tarayıcısında açılır (boş Tarayıcı sekmesi açılmaz); Kodi o sayfada
+  // tıklayamaz, yazamaz.
+  if (!gomuluTarayiciVar()) return _kodiSistemTarayicisinda(e);
   final ed = context.read<EditorProvider>();
   final kodi = context.read<KodiProvider>();
   final t = kTarayici;
@@ -508,4 +512,21 @@ Future<String> kodiTarayiciEylemi(BuildContext context, KodiEylemi e) async {
     }
   }
   return sonuc;
+}
+
+Future<String> _kodiSistemTarayicisinda(KodiEylemi e) async {
+  final v = e.veri;
+  final String yazi;
+  switch ('${v['islem']}') {
+    case 'ac':
+      yazi = '${v['adres']}';
+    case 'ara':
+      yazi = '${v['sorgu']}';
+    default:
+      throw "Linux'ta Kodi sayfaya tıklayamaz; sayfa tarayıcında açıldı";
+  }
+  if (!await disaridaAc(tarayiciAdresi(yazi))) throw 'Tarayıcı açılamadı';
+  return '${v['islem']}' == 'ara'
+      ? 'Tarayıcında Google\'da arandı: $yazi'
+      : 'Tarayıcında açıldı: $yazi';
 }

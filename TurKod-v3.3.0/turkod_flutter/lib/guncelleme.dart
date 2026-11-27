@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import 'platform_ayarlari.dart';
 
@@ -73,7 +74,7 @@ Future<void> guncellemeKontrolEt(
   // Sunucu bu kurulumun kendini güncelleyip güncelleyemeyeceğini ve nasıl
   // (setup / appimage / dmg) güncelleyeceğini söyler (updater.kurulum_turu).
   await _guncelle(context, cagir, kaydet,
-      kurulabilir: r['kurulabilir'] is bool ? r['kurulabilir'] as bool : Platform.isWindows,
+      kurulabilir: r['kurulabilir'] is bool ? r['kurulabilir'] as bool : suankiIsletim == Isletim.windows,
       tur: (r['kurulum_turu'] ?? '').toString().isEmpty
           ? 'setup'
           : r['kurulum_turu'].toString());
@@ -82,10 +83,7 @@ Future<void> guncellemeKontrolEt(
 // ---------------------------------------------------------------------------
 // Atlanan sürüm
 // ---------------------------------------------------------------------------
-File _atlananDosya() {
-  final s = Platform.pathSeparator;
-  return File('${veriKlasoru()}${s}atlanan_surum.txt');
-}
+File _atlananDosya() => File(p.join(veriKlasoru(), 'atlanan_surum.txt'));
 
 String _atlananOku() {
   try {
@@ -298,8 +296,7 @@ Future<void> _kurulumuBaslat(String kurulumYolu) async {
 
   // Pencere açılamazsa (örn. PowerShell kısıtlıysa) güncelleme yine de sürer.
   try {
-    final betik = File(
-        '${Directory.systemTemp.path}${Platform.pathSeparator}turkod_guncelleme_arayuz.ps1');
+    final betik = File(p.join(Directory.systemTemp.path, 'turkod_guncelleme_arayuz.ps1'));
     // UTF-8 BOM: Windows PowerShell 5.1 Türkçe karakterleri doğru okusun.
     await betik.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(_arayuzBetigi)]);
     final sistem = Platform.environment['SystemRoot'] ?? r'C:\Windows';

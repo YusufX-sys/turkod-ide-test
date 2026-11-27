@@ -129,23 +129,69 @@ def model_baglami(yol):
 _DLL_TUTAMACLARI = []
 
 
+def _kitaplik_mi(ad):
+    """Windows'ta .dll; Linux'ta .so / .so.12 gibi paylaşılan kitaplık."""
+    k = ad.lower()
+    if os.name == "nt":
+        return k.endswith(".dll")
+    return k.endswith(".so") or ".so." in k
+
+
 def cuda_dll_dizinleri(paket):
     dizinler = []
     kok = os.path.join(paket, "nvidia")
     if os.path.isdir(kok):
         for d, _, dosyalar in os.walk(kok):
-            if any(x.lower().endswith(".dll") for x in dosyalar):
+            if any(_kitaplik_mi(x) for x in dosyalar):
                 dizinler.append(d)
     cuda = os.environ.get("CUDA_PATH")
-    if cuda and os.path.isdir(os.path.join(cuda, "bin")):
-        dizinler.append(os.path.join(cuda, "bin"))
+    alt = "bin" if os.name == "nt" else "lib64"
+    if cuda and os.path.isdir(os.path.join(cuda, alt)):
+        dizinler.append(os.path.join(cuda, alt))
     return dizinler
+
+
+# Linux'ta önceden yükleme sırası: cublas, cublasLt'e; ikisi cudart'a bağlı.
+_POSIX_CUDA_SIRASI = ("libcudart", "libcublasLt", "libcublas")
+
+
+def _posix_cuda_onyukle(dizinler, paket):
+    """Linux: nvidia-* paketlerindeki libcudart / libcublasLt / libcublas
+    (site-packages/nvidia/*/lib/*.so*) RTLD_GLOBAL ile önceden yüklenir; yoksa
+    libllama/libggml-cuda bunları LD_LIBRARY_PATH'te bulamaz."""
+    import ctypes
+    import re
+    paket_kok = os.path.abspath(paket)
+    for onek in _POSIX_CUDA_SIRASI:
+        desen = re.compile(re.escape(onek) + r"\.so(?:\.\d+)*$")
+        for d in dizinler:
+            if not os.path.abspath(d).startswith(paket_kok):
+                continue  # Toolkit'in tüm kitaplıkları önceden yüklenmez
+            try:
+                adlar = sorted(os.listdir(d))
+            except OSError:
+                continue
+            bulundu = False
+            for ad in adlar:
+                if desen.match(ad):
+                    try:
+                        _DLL_TUTAMACLARI.append(
+                            ctypes.CDLL(os.path.join(d, ad), mode=ctypes.RTLD_GLOBAL))
+                        bulundu = True
+                        break
+                    except OSError:
+                        pass
+            if bulundu:
+                break
 
 
 def dll_dizinlerini_ekle(paket):
     """CUDA DLL klasörlerini arama yoluna ekler ve kitaplıkları önceden
     yükler (llama.dll bağımlılıklarını adlarıyla bulabilsin)."""
     dizinler = cuda_dll_dizinleri(paket)
+    if os.name != "nt":
+        _posix_cuda_onyukle(dizinler, paket)
+        return dizinler
     for d in dizinler:
         try:
             _DLL_TUTAMACLARI.append(os.add_dll_directory(d))

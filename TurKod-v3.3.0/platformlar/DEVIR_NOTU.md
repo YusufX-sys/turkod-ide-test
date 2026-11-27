@@ -184,6 +184,12 @@ dökümü gelmez, ama işin özü bu notta.
   dar panelde (322 px) 22 px taşıyordu (gerçek hata, her sistemde) → 440 px altında
   yakınlaştırma/kopyalama/ayrı pencere "⋯ Diğer" menüsünde. Kitap s.94 ve
   kodi_kilavuz.py güncellendi (manifest yeniden imzalanmalı); sürüm notlarına eklendi.
+  `arayuz-macos` (#21), `arayuz-windows` (#22), `arayuz-linux` (#23), 2026-11-22: ÜÇÜ DE
+  TAMAMEN YEŞİL. macOS'ta Satıra Git yine Esc ile kapanmadı (test düğmeyle kapattı):
+  yalnızca test yapaylığı. macOS'ta metin alanındaki Esc Flutter'da
+  DoNothingAndStopPropagationTextIntent ile platforma bırakılır; gerçek Mac
+  `cancelOperation:` gönderir → DismissIntent (default_text_editing_shortcuts.dart).
+  Testin sentetik tuşu platform metin girişinden geçmez.
 - **Yapı:** Kod TEK; Windows/Linux/macOS için ayrı kopya yoktur. Sisteme göre değişen
   kod iki dosyada toplanır: `turkod_ide/platform_katmani/` ve
   `turkod_flutter/lib/platform_ayarlari.dart`. `platformlar/<sistem>/` yalnızca o
@@ -286,6 +292,52 @@ Bütün Python ve Dart kodu sisteme bağlı kalıplar için tarandı. Düzeltile
 Bilerek Windows'a özgü kalanlar: IDE içindeki tarayıcı (WebView2), EXE'ye Dönüştür,
 Kodi masaüstü penceresi, Win32 görünüm ayrıntıları (koyu başlık, görev çubuğu
 simgesi). Kullanıcı programı pencere simgesi (runner) yalnızca Windows'ta.
+
+## 4c. Windows'a özgü kalanların taşınması (2026-11-22, kullanıcı: "sırasıyla hepsini yap")
+Yukarıdaki "bilerek Windows'a özgü kalanlar" kapatıldı (CI'da derlenecek / denenecek):
+- Yerel AI: `cpu_paketi()` → Apple Silicon `metal` (0.3.36), Intel Mac `cpu-intel-mac`
+  (0.3.2: 0.3.36'nın Intel Mac tekerleği yok). `apple_hizlandirma` (Metal, belleğin
+  %65'i) sunucuya `--gpu`. AMD: `_gpu_linux` (/sys/class/drm) + Vulkan paketi
+  (Windows ve Linux x86_64) `GPU_TURLERI = ("cuda", "vulkan")`; doğrulanamazsa CPU'ya düşer.
+- Kodi "yalnızca TürKod penceresi" görüntüsü: Linux/macOS'ta arayüz kendi kökünü
+  (`kAnaPencereAnahtari`, RepaintBoundary) PNG olarak `kodi_sor`'a `pencere_goruntusu`
+  ile gönderir; `kodi_goruntu.yakala(kip, hazir=...)` JPEG'e çevirir.
+- Kullanıcı programı simgesi: Linux/macOS'ta .png (Tk iconphoto, pygame, ursina/panda3d).
+- EXE'ye Dönüştür → Linux/macOS'ta "Uygulamaya Dönüştür…": `cikti_yollari` (Windows .exe,
+  Linux uzantısız, macOS .app; konsol kipinde tek dosya), ileti kutusu osascript /
+  zenity / kdialog, exe_terminali POSIX (creationflags 0, killpg, SIGINT). Gerçek derleme
+  testi (`TURKOD_EXE_TESTI=1`) artık her sistemde; Windows'ta 33 test yerelde geçti.
+- Kodi masaüstü penceresi: `linux/runner/my_application.cc` (GTK: kenarsız, hep üstte,
+  RGBA, input shape ile tıklama bölgesi, begin_move_drag; Wayland'de konum/üstte durma
+  pencere yöneticisine kalır) ve `macos/Runner/MainFlutterWindow.swift` (borderless,
+  .floating, ignoresMouseEvents ile bölge, elle sürükleme, dartEntrypointArguments).
+  Yalnızca derlemesi CI'da görülebilir; görünüşü gerçek makinede denenmedi.
+- IDE tarayıcısı macOS'ta: `webview_flutter` (kullanıcı onayıyla eklendi) — `SayfaMotoru`
+  (Windows `_WebView2Motoru`, macOS `_WkMotoru`; betik sonucu JSON.stringify ile döner,
+  target=_blank aynı sayfada). Linux'ta yok (kullanıcı kararı).
+- Kitap: s.8 (kurulum, üç sistem), Bölüm 21: Cmd notu, tarayıcı Linux notu, ses, çöp
+  kutusu, Uygulamaya Dönüştür, Metal/Vulkan; "Programı Windows'tan kullanmak" →
+  "Çift tıkla, çalışsın". kodi_kilavuz.py yenilendi (manifest yeniden imzalanmalı).
+- CI `testler` işine: gerçek paketleme, yerel AI motoru kurulumu (Metal doğrulaması),
+  Vulkan paketi indirme. Sırada: `hepsi` (yerel kod derlemesi) ve üç `arayuz-*`.
+
+## 4d. Uyumluluk denetimi düzeltmeleri (2026-11-25)
+- `platform_katmani.alt_surec_ortami(env)`: paketli Linux/macOS'ta PyInstaller'ın
+  LD_LIBRARY_PATH / DYLD_* ayarı (`<AD>_ORIG` geri konur, yoksa paket yolları atılır)
+  dış programlara geçmez; macOS'ta Homebrew klasörleri PATH'e, PYTHONDONTWRITEBYTECODE=1.
+  backend_main.py açılışta bunu os.environ'a uygular (paketli) ve `path_tamamla()` çağırır.
+- `yazi_tipi_aileleri()`: Linux `fc-list`, macOS ayrı Python sürecinde Tk (bu süreçte
+  Tk AÇILMAZ), Windows None.
+- `path_e_ekle`: ~/.local/bin kabuğun PATH'inde değilse işaretli satır (`# TürKod:
+  turkod komutu`) .zprofile / .bashrc+.profile / fish conf.d'ye; `path_ten_cikar` siler.
+- `terminalde_ac` hata fırlatmaz (calistirici `--kabuk-pencere` yakalamıyor): False +
+  `son_terminal_hatasi()` (Linux: terminal yok; macOS: -1743 Otomasyon izni).
+- macOS: çöp kutusu NSFileManager (JXA), Info.plist mikrofon/Apple Events metinleri,
+  entitlements audio-input + apple-events, translocation / /Volumes uyarısı.
+- Linux: AppImage'da editör AppImage dosyasıyla açılır; .desktop `org.turkod.TurKod.desktop`
+  (StartupWMClass = uygulama kimliği); .trpy ilişkisi xdg-utils yoksa Türkçe hata.
+- CI: `testler` Windows'ta da; Linux/macOS'ta flutter analyze + test; paketli
+  uygulamada arka uç başlamazsa iş düşer; AppImage `--turkod --surum` denenir.
 
 ## 5. Çalışma kuralları (eski bilgisayardaki Claude hafızasından)
 

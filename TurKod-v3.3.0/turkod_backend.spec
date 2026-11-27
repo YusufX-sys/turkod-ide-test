@@ -59,6 +59,8 @@ datas.append((os.path.join(PAKET, "kodi_ses.ps1"), "."))
 datas.append((os.path.join(PAKET, "exe_terminali.py"), "."))
 datas.append((os.path.join(PAKET, "cikti_cevirici.py"), "."))
 hiddenimports.append("turkod_ide.exe_donusturucu")
+# Kütüphane Rehberi (Öğren menüsü) yalnızca ilk açılışta, işlev içinden yüklenir.
+hiddenimports += ["turkod_ide.kutuphane_rehberi", "turkod_ide.kutuphane_aciklamalari"]
 # updater.mevcut_surum() <_MEIPASS>\surum.txt dosyasını okur (tek sürüm kaynağı).
 datas.append((os.path.join(KOK, "surum.txt"), "."))
 # Terminal penceresi + .trpy dosya simgesi (calistirici.ikon_yolu, turkod.iss DefaultIcon).

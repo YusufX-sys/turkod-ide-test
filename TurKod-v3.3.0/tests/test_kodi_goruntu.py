@@ -119,7 +119,7 @@ class CekirdekTestleri(unittest.TestCase):
 
     def test_gorsel_giden_istek(self):
         r, s, y = self._sor(GORSEL, "pencere")
-        y.assert_called_once_with("pencere")
+        y.assert_called_once_with("pencere", hazir=None)
         son = s.call_args.args[2][-1]["content"]
         self.assertEqual(son[1]["image_url"]["url"], "data:image/jpeg;base64,QUJD")
         self.assertEqual(r["goruntu"], "gitti")

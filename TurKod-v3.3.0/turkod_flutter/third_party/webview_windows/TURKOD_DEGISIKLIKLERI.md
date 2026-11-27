@@ -24,8 +24,9 @@ penceresindeki bir taşıyıcı alt pencerede çizilir. Girdi doğrudan Chromium
   `capturePreview`):
   - `setWindowBounds`: taşıyıcının yeri ve boyu (Flutter görünümüne göre fiziksel piksel).
   - `setWindowVisible`: göster / gizle (başka sekme, menü açıkken).
-  - `setClipRects`: taşıyıcıdan kesilen yuvarlak köşeli dikdörtgenler; Kodi ve
-    balonu sayfanın üstünde görünsün diye (`SetWindowRgn`).
+  - `setClipRects`: taşıyıcıdan kesilen dikdörtgenler; Kodi ve balonu sayfanın
+    üstünde görünsün diye (`SetWindowRgn`). Her dikdörtgenin köşe yarıçapı ayrıdır
+    (balon yuvarlak; Kodi'nin silüetini oluşturan küçük parçalar keskin köşeli).
   - `capturePreview`: sayfanın PNG görüntüsü; menü ya da iletişim kutusu açıkken
     gerçek sayfa gizlenir, yerine bu görüntü konur.
 - Kısayollar: sayfa odaktayken Ctrl/Alt'lı tuşlar ve F tuşları (F5 dışında)

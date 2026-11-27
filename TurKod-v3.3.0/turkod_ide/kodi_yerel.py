@@ -57,6 +57,7 @@ _TAKMA_ADLAR = {
     "view.problems": [["sorun"]],
     "view.split": [["editör", "böl"]],
     "learn.book": [["kitap"]],
+    "learn.libraries": [["kütüphane", "rehber"]],
     "learn.docs": [["dokümantasyon"], ["belge", "site"]],
     "tools.shell": [["kabuk"]],
     "tools.local_models": [["yerel", "model"]],

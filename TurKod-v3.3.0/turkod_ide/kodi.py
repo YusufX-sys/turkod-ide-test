@@ -9,12 +9,15 @@ bölümü bulup modele verir (kodi_kilavuz.py, kitaptan üretilir). Mesajın
 kelimelerine bakılarak hiçbir karar verilmez; her istek aynı yapıdadır.
 """
 import json
+import os
 import re
 
 try:
     from .kodi_kilavuz import BOLUMLER, KITAP_BOLUMLERI
+    from . import platform_katmani
 except ImportError:  # turkod_ide klasörü sys.path'teyken (paketlenmiş arka uç)
     from kodi_kilavuz import BOLUMLER, KITAP_BOLUMLERI
+    import platform_katmani
 
 YAPIMCI = "Yusuf Tandoğan"
 EPOSTA = "yusuftndgn.2@gmail.com"
@@ -60,6 +63,7 @@ KOMUTLAR = {
     "view.extensions": "Eklenti Özellikleri",
     "view.keybindings": "Klavye Kısayolları",
     "learn.book": "Kitabı aç",
+    "learn.libraries": "Kütüphane Rehberi",
     "help.tour": "Arayüz Turu",
 }
 PANELLER = ("gezgin", "eklentiler", "ai", "terminal")
@@ -70,13 +74,26 @@ TERMINAL_SINIRI = 1500
 TARAYICI_OGE_SINIRI = 80
 KOD_HEDEFLERI = ("yeni_sekme", "imlec", "degistir")
 
+# Kodi'nin kendi hâli ("ifade" eylemi): yapay zekâ her cevabında yüzünü,
+# pozunu, hareketini ve çevresindeki efekti seçer. Adlar arayüzdeki
+# (kodi_ifade.dart) adlarla aynıdır. Dinleme ve konuşma yüzünü program seçer.
+KODI_YUZLERI = ("mutlu", "heyecanli", "saskin", "kahkaha", "goz_kirp", "sevgi", "utangac",
+                "merakli", "endiseli", "uzgun", "dusunceli", "uykulu", "gururlu")
+KODI_POZLARI = ("normal", "el_salla", "dusun", "zafer", "basparmak", "sola_goster",
+                "saga_goster", "omuz_silk", "alkis", "eller_belde", "yuz_kapa")
+KODI_HAREKETLERI = ("yok", "zipla", "dans", "don", "titre", "selam", "salla")
+KODI_EFEKTLERI = ("yok", "konfeti", "kalpler", "yildizlar", "soru", "unlem", "zzz", "nota")
+_IFADE_ALANLARI = (("yuz", KODI_YUZLERI), ("poz", KODI_POZLARI),
+                   ("hareket", KODI_HAREKETLERI), ("efekt", KODI_EFEKTLERI))
+_ASCII = str.maketrans("ıİçÇğĞöÖşŞüÜâÂîÎûÛ", "iIcCgGoOsSuUaAiIuU")
+
 KIMLIK = """Sen Kodi'sin: TürKod IDE'de yaşayan, "{kitap}" kitabında çocuklara Türkçe kod \
 yazmayı öğreten neşeli, sevimli robot. Şimdi programın içinde kullanıcıya yardım ediyorsun.
 
 NASIL KONUŞURSUN
 - Karşındakine "sen" diye, sıcak ve neşeli; 7 yaş üstü çocuğun anlayacağı kısa, açık cümleler (çoğu zaman \
 2-6 cümle); adımları numarala.
-- Menü, düğme, kısayol adlarını programdaki gibi yaz (**Çalıştır → EXE'ye Dönüştür…**, `Ctrl+R`).
+- Menü, düğme, kısayol adlarını programdaki gibi yaz (**Çalıştır → {donustur}**, `{kisayol}+R`).
 - Azarlama, cesaret ver. Bilmediğini uydurma; emin değilsen söyle.
 - Kod örneğini ```python bloğunda Python yaz, program TürKod'a çevirir. Yazıda dilin adı \
 TürKod'dur (Python'u sorulmadıkça anma). Kendinden birinci tekil kişiyle, "Kodi" diye söz et.
@@ -104,6 +121,7 @@ açılır. Bölümler: {icindekiler}. İstenirse o sayfada açarsın (kitap eyle
 - Sen sol şeritteki robot düğmesiyle ya da Yardım → Kodi ile Konuş ile gelirsin. Yapay zekân \
 Ayarlar → Yapay Zekâ → Görevler'deki "Kodi" görevinden seçilir; balondaki ampul düşünmeyi \
 açıp kapatır.
+{sistem_satiri}
 - Dilin kelimeleri: yazdır, girdi_al, eğer / değilse_eğer / değilse, döngü (`döngü enerji > 0:`), \
 için (`için i aralık(5):`, `için meyve içinde meyveler:`), fonksiyon ... döndür, sınıf, kendisi, \
 __başlat__, içe_aktar, den ... içe_aktar, Doğru, Yanlış, Hiçlik, ve, veya, değil, kır, \
@@ -179,6 +197,12 @@ yap; ezberden liste yazma. Kısayolları KOMUTLAR'daki parantezlerden söyle.
 {"eylem": "tarayici", "islem": "yaz", "no": 2, "metin": "<yazı>", "gonder": true|false}
 {"eylem": "tarayici", "islem": "kaydir|geri|ileri|yenile", "yon": "asagi|yukari"}
 {"eylem": "yok"} (yapılacak iş yok)
+{"eylem": "ifade", "yuz": "...", "poz": "...", "hareket": "...", "efekt": "..."} (KENDİ HÂLİN: \
+her cevaba bir tane ekle, cevabının duygusuna uysun ve çeşitli olsun; alanların hepsi isteğe \
+bağlı. İş sayılmaz: iş yoksa yanına yine {"eylem": "yok"} yaz. Kullanıcıya bundan söz etme.) \
+yuz: {yuzler}; poz: {pozlar}; hareket: {hareketler}; efekt: {efektler}. Örnek: kod çalışınca \
+heyecanli + zafer + zipla + konfeti; hata çıkınca endiseli + omuz_silk; teşekkür edilince \
+sevgi + kalpler; soru sorulunca merakli + dusun + soru; şaka yapınca goz_kirp + dans + nota.
 Tarayıcıda iş yapınca yeni sayfa sana kendiliğinden gelir ("Sayfa açıldı, isteğime devam et."): \
 bakıp istenen iş BİTENE kadar adım adım sürdür. Ara sayfada (ör. arama sonuçları) "hangisini \
 açayım?" diye sorma, en uygununu seç ve tıkla ("bir oyun aç" → oyun sitesini aç, oyunun sayfasına \
@@ -254,7 +278,10 @@ def eylem_kurallari(baglam=None, kucuk=False, **_eski):
     aynıdır; mesajın ne dediğine bakılarak bir şey eklenip çıkarılmaz.
     kucuk: istek sağlayıcının sınırına sığmadı; ayar listesi ve kılavuz
     başlıkları olmadan yeniden denenir."""
-    metin = EYLEM_GIRIS
+    metin = (EYLEM_GIRIS.replace("{yuzler}", "|".join(KODI_YUZLERI))
+             .replace("{pozlar}", "|".join(KODI_POZLARI))
+             .replace("{hareketler}", "|".join(KODI_HAREKETLERI))
+             .replace("{efektler}", "|".join(KODI_EFEKTLERI)))
     # Komutun gerçek kısayolu da yazılır (kullanıcının değiştirdiği): Kodi
     # kısayolları ezberden uydurmasın.
     kisayollar = {str(k.get("id")): str(k.get("kisayol"))
@@ -385,13 +412,39 @@ def _durum_metni(baglam, soru="", kucuk=False):
     return "BAĞLAM (programın şu anki hâli)\n" + "\n".join(satirlar) + "\n"
 
 
+def sistem_bilgisi():
+    """KIMLIK'teki sisteme bağlı parçalar: kullanıcının işletim sistemi,
+    kısayol tuşu (macOS'ta Cmd), dönüştürme menüsünün adı ve veri klasörü."""
+    try:
+        veri = platform_katmani.veri_klasoru()
+    except Exception:  # noqa: BLE001
+        veri = ""
+    ev = os.path.expanduser("~")
+    if veri and ev and (veri == ev or veri.startswith(ev + os.sep)):
+        veri = "~" + veri[len(ev):].replace(os.sep, "/")
+    if platform_katmani.macos_mu():
+        satir = ("- Kullanıcı macOS kullanıyor: kısayollarda Ctrl yerine Cmd; "
+                 "'EXE'ye Dönüştür' yerine 'Uygulamaya Dönüştür' (.app yapar); "
+                 f"veri klasörü {veri}.")
+        return {"sistem_satiri": satir, "kisayol": "Cmd", "donustur": "Uygulamaya Dönüştür…"}
+    if platform_katmani.linux_mu():
+        satir = ("- Kullanıcı Linux kullanıyor: kısayollar Ctrl ile; "
+                 "'EXE'ye Dönüştür' yerine 'Uygulamaya Dönüştür' (uzantısız program dosyası "
+                 f"yapar); veri klasörü {veri}.")
+        return {"sistem_satiri": satir, "kisayol": "Ctrl", "donustur": "Uygulamaya Dönüştür…"}
+    satir = ("- Kullanıcı Windows kullanıyor: kısayollar Ctrl ile; programı "
+             f"'EXE'ye Dönüştür' ile .exe yapar; veri klasörü {veri}.")
+    return {"sistem_satiri": satir, "kisayol": "Ctrl", "donustur": "EXE'ye Dönüştür…"}
+
+
 def sabit_sistem_mesaji(surum="", baglam=None, hafiza=None, kucuk=False, **_eski):
     """Kodi'nin sistem mesajı (kimlik + kurallar + katalog + kılavuz
     başlıkları). Her istekte aynıdır; sağlayıcılar isteğin değişmeyen başını
     önbelleğe alabilir."""
     metin = KIMLIK.format(kitap=KITAP, surum=surum or "", yapimci=YAPIMCI, eposta=EPOSTA,
                           github=GITHUB, hata=HATA_BILDIR, site=SITE,
-                          icindekiler="; ".join(f"{ad} s.{s}" for ad, s in KITAP_BOLUMLERI))
+                          icindekiler="; ".join(f"{ad} s.{s}" for ad, s in KITAP_BOLUMLERI),
+                          **sistem_bilgisi())
     # hafiza: Kodi'nin kullanıcı hakkındaki notları (nadiren değişir; sona
     # konur ki önbelleğe alınan baş kısım bozulmasın).
     return metin + eylem_kurallari(baglam, kucuk) + (hafiza or "")
@@ -442,12 +495,12 @@ ARACLAR = [{
                 "eylem": {"type": "string", "enum": [
                     "panel", "dosya_ac", "sekme", "satira_git", "ara", "kitap", "kilavuz",
                     "kod_yaz", "komut", "ayarlar_ac", "eklenti", "ayar", "model_ata", "rehber",
-                    "tarayici", "hatirla", "unut", "yok"]},
+                    "tarayici", "hatirla", "unut", "ifade", "yok"]},
                 "islem": {"type": "string",
                           "enum": ["ac", "ara", "tikla", "yaz", "kaydir", "geri", "ileri", "yenile"]},
                 **{ad: {"type": "string"} for ad in (
                     "adres", "sorgu", "metin", "yon", "bolum", "panel", "durum", "dosya", "ad", "istek",
-                    "hedef", "id", "gorev", "model", "not")},
+                    "hedef", "id", "gorev", "model", "not", "yuz", "poz", "hareket", "efekt")},
                 **{ad: {"type": "integer"} for ad in ("no", "satir", "sira", "sayfa")},
                 "gonder": {"type": "boolean"},
                 "devam": {"type": "boolean"},
@@ -681,6 +734,8 @@ def _tur_tahmini(e):
             elif anahtar == "kitap" and not isinstance(deger, (dict, list)):
                 e.setdefault("sayfa", deger)
             return anahtar
+    if any(alan in e for alan, _ in _IFADE_ALANLARI):
+        return "ifade"
     if "satir" in e:
         return "satira_git"
     if "bolum" in e:
@@ -765,6 +820,45 @@ def _tarayici_dogrula(e, baglam):
     elif islem == "kaydir":
         sonuc["yon"] = "yukari" if str(e.get("yon") or "").lower().startswith("yuk") else "asagi"
     return sonuc
+
+
+def _ifade_adi(deger):
+    """ "Heyecanlı", "baş parmak", "Göz-Kırp" → "heyecanli", "basparmak", "goz_kirp"."""
+    ad = str(deger or "").strip().translate(_ASCII).lower()
+    return re.sub(r"[\s\-]+", "_", ad)
+
+
+def _ifade_dogrula(e):
+    """Kodi'nin hâli: bilinmeyen değerler atılır; hiçbiri geçerli değilse None."""
+    sonuc = {"eylem": "ifade"}
+    for alan, gecerli in _IFADE_ALANLARI:
+        if alan not in e:
+            continue
+        ad = _ifade_adi(e.get(alan))
+        if ad not in gecerli:
+            ad = ad.replace("_", "")  # "baş parmak" → "basparmak"
+            ad = next((g for g in gecerli if g.replace("_", "") == ad), None)
+        if ad:
+            sonuc[alan] = ad
+    return sonuc if len(sonuc) > 1 else None
+
+
+def is_eylemi(e):
+    """Programda iş yapan eylem mi? "ifade" (Kodi'nin hâli) iş sayılmaz."""
+    return isinstance(e, dict) and e.get("eylem") != "ifade"
+
+
+def ifadeyi_ayir(eylemler):
+    """(son ifade alanları ya da None, ifadesiz eylemler). İfade arayüze iş
+    kartı olarak gitmez: cevabın "ifade" alanı olur."""
+    ifade = None
+    kalan = []
+    for e in eylemler:
+        if isinstance(e, dict) and e.get("eylem") == "ifade":
+            ifade = {k: v for k, v in e.items() if k != "eylem"}
+        else:
+            kalan.append(e)
+    return ifade, kalan
 
 
 def _dogrula(e, baglam=None):
@@ -888,6 +982,8 @@ def _dogrula(e, baglam=None):
         not_ = " ".join(str(e.get("not") or e.get("metin") or "").split())
         if not_ and len(not_) <= 200:
             return {"eylem": tur, "not": not_}
+    elif tur == "ifade":
+        return _ifade_dogrula(e)
     elif tur == "model_ata":
         gorev = str(e.get("gorev") or "").strip().lower()
         model = str(e.get("model") or "").strip()
@@ -1014,6 +1110,9 @@ def gecersiz_eylemler(cevap, baglam=None):
     Bunlar sessizce atılınca Kodi "tıklıyorum" deyip hiçbir şey yapmıyordu."""
     hatali = []
     for e in _eylemleri_cikar(cevap)[1]:
+        if isinstance(e, dict) and (str(e.get("eylem") or "").strip().lower() == "ifade"
+                                    or (not e.get("eylem") and _tur_tahmini(dict(e)) == "ifade")):
+            continue  # Kodi'nin hâli: yanlış ad yüzünden model yeniden çağrılmaz
         if _dogrula(e, baglam) is None and e not in hatali:
             hatali.append(e)
     return hatali

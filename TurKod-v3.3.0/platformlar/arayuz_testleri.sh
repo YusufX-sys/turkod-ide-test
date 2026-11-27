@@ -16,8 +16,13 @@ set -o pipefail
 
 KOK="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SONUC="${1:-$KOK/../sonuc}"
-mkdir -p "$SONUC/ekranlar"
+mkdir -p "$SONUC"
 SONUC="$(cd "$SONUC" && pwd)"
+# Önceki çalıştırmadan kalan sonuçlar özeti bozmasın (eski .log'daki "KALDI"
+# yeni çalıştırmayı da düşürürdü). Yalnızca bu betiğin yazdığı dosyalar silinir.
+rm -f "$SONUC"/*.log "$SONUC"/*.txt
+rm -rf "$SONUC/ekranlar"
+mkdir -p "$SONUC/ekranlar"
 
 case "$(uname -s)" in
     Linux)  CIHAZ="linux" ;;
@@ -90,6 +95,7 @@ calistir duzeltmeler-2 duzeltmeler_test.dart "$PROFIL" 2   # aynı profil: kurta
 calistir eksikler eksikler_test.dart "$(yeni_profil turkod_eksik_)"
 calistir turkce-ceviri turkce_ceviri_test.dart "$(yeni_profil turkod_ceviri_)"
 calistir yeni-ozellikler yeni_ozellikler_test.dart "$(yeni_profil turkod_yeni_)"
+calistir buyuk-dosya buyuk_dosya_test.dart "$(yeni_profil turkod_buyuk_)"
 
 # --- Özet ------------------------------------------------------------------------
 {

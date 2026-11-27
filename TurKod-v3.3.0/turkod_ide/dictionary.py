@@ -1283,6 +1283,8 @@ KORUNMAYAN_KELIMELER = {
 _OZEL_METOT_HEDEFLERI = {
     "update", "input", "awake", "on_enable", "on_disable",
     "on_destroy", "run", "quit",
+    # Pygame Zero (kolay_oyun): fonksiyon çiz() -> def draw(), GENİŞLİK = ... -> WIDTH
+    "HEIGHT", "ICON", "TITLE", "WIDTH", "draw", "on_key_down", "on_key_up", "on_mouse_down", "on_mouse_move", "on_mouse_up", "on_music_end",
 }
 KORUNMAYAN_KELIMELER.update({
     _sozluk_kelime(_desen)

@@ -146,6 +146,11 @@ def bellek_gb():
     return None
 
 
+def yazi_tipi_aileleri():
+    """Windows'ta çağıran (ide_core) yazı tiplerini kendi yoluyla okur."""
+    return None
+
+
 def mikrofon_komutu(ornekleme):
     return None
 

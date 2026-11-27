@@ -4,9 +4,11 @@
 # "hedef" seç. Özel (private) depoda her çalıştırma aylık ücretsiz dakikadan düşer
 # ve macOS dakikaları daha pahalı sayılır; önce "testler" ile başla.
 #
-#   testler : Python testleri gerçek Ubuntu ve macOS'ta (en ucuzu)
-#   linux   : AppImage derlenir, duman testi + ekran görüntüsü
-#   macos   : TurKod.app + .dmg derlenir (yerel/ad-hoc imza), duman testi + ekran görüntüsü
+#   testler : Python testleri gerçek Ubuntu, macOS ve Windows'ta; Flutter analyze + test
+#             (Ubuntu ve macOS'ta). En ucuzu.
+#   linux   : AppImage derlenir, duman testi, arka uç açılış denetimi + ekran görüntüsü
+#   macos   : TurKod.app + .dmg derlenir (yerel/ad-hoc imza), duman testi, arka uç açılış
+#             denetimi + ekran görüntüsü
 #   hepsi   : üçü birden
 #   arayuz-linux : arayüz (entegrasyon) testleri Linux'ta: uygulama açılır, menülere
 #                  tıklanır, kod yazılır, kısayollara basılır (platformlar/arayuz_testleri.sh)
@@ -45,9 +47,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: [ubuntu-22.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -65,6 +67,58 @@ jobs:
           else
             python -m pytest tests -q -p no:cacheprovider --ignore=tests/e2e_backend.py
           fi
+      # Flutter arayüzünün çözümlemesi ve birim testleri (Windows'ta yerelde çalıştırılır).
+      - uses: subosito/flutter-action@v2
+        if: runner.os != 'Windows'
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_SURUMU }}
+          cache: true
+      - name: Flutter analyze
+        if: runner.os != 'Windows'
+        working-directory: TurKod-v3.3.0/turkod_flutter
+        run: |
+          flutter pub get
+          flutter analyze
+      - name: Flutter test
+        if: runner.os != 'Windows'
+        working-directory: TurKod-v3.3.0/turkod_flutter
+        run: flutter test
+      # "Uygulamaya Dönüştür": gerçek PyInstaller derlemesi (Linux'ta program dosyası,
+      # macOS'ta .app / tek dosya), derlenen program çalıştırılıp kaynağı okunur.
+      - name: Gerçek program paketleme
+        env:
+          TURKOD_EXE_TESTI: "1"
+        run: python -m pytest tests/test_exe_donusturucu.py -q -p no:cacheprovider -k GercekExeTesti
+      # Yerel AI motoru: Linux'ta CPU paketi, Apple Silicon'da Metal'li paket kurulur
+      # ve ayrı süreçte yüklenip denenir (model indirilmez). Windows'ta yerelde denenir.
+      - name: Yerel AI motoru
+        if: runner.os != 'Windows'
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, ".")
+          from turkod_ide import yerel_modeller as y
+          paket = y.cpu_paketi()
+          print("paket:", paket, "|", y.donanim_bilgisi()["hizlandirma"]["aciklama"])
+          if not y._pip_kur("cpu", paket):
+              print("\n".join(y._KURULUM["gunluk"][-20:]))
+              sys.exit("motor kurulamadı")
+          sonuc = y.motoru_dogrula("cpu")
+          print("doğrulama:", sonuc)
+          if not sonuc:
+              print("\n".join(y._KURULUM["gunluk"][-20:]))
+              sys.exit("motor yüklenemedi")
+          if paket == "metal" and not sonuc.get("gpu"):
+              sys.exit("Metal'li motor ekran kartı desteğiyle derlenmemiş")
+          PY
+      - name: Vulkan motor paketi indirilebiliyor (Linux, AMD ekran kartları için)
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip download --only-binary=:all: --no-deps -d "$RUNNER_TEMP/vulkan" \
+            --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/vulkan \
+            "llama-cpp-python==0.3.36"
+          ls -la "$RUNNER_TEMP/vulkan"
 
   # ---------------------------------------------------------------------------
   linux:
@@ -91,16 +145,48 @@ jobs:
         run: python -m pip install -r ../requirements.txt
       - name: Derle (AppImage + .tar.gz)
         run: bash platformlar/linux/build_linux.sh --imzasiz
-      - name: Uygulamayı aç ve ekran görüntüsü al
+      # AppImage'ın kendisi (FUSE'suz, açarak) `turkod --surum` ile denenir.
+      - name: AppImage hızlı deneme
+        run: |
+          SURUM="$(tr -d ' \r\n' < surum.txt)"
+          APPIMAGE="$(ls dist/TurKod-*.AppImage | head -n 1)"
+          CIKTI="$("$APPIMAGE" --appimage-extract-and-run --turkod --surum)"
+          echo "$CIKTI"
+          echo "$CIKTI" | grep -q "$SURUM"
+      # Uygulama açılır; arka uç (sunucu) gerçekten başlamazsa iş DÜŞER.
+      - name: Uygulamayı aç (arka uç başlamalı)
+        run: |
+          mkdir -p ../sonuc
+          rm -f /tmp/turkod_backend_port
+          Xvfb :99 -screen 0 1400x900x24 >/dev/null 2>&1 &
+          echo "XVFB_PID=$!" >> "$GITHUB_ENV"
+          sleep 2
+          DISPLAY=:99 nohup dist/linux/TurKod/turkod_flutter > ../sonuc/arayuz-linux.log 2>&1 &
+          echo "UYGULAMA_PID=$!" >> "$GITHUB_ENV"
+          GUNLUK="$HOME/.local/share/TurKod/backend.log"
+          for i in $(seq 1 60); do
+            if grep -q "backend başlıyor" "$GUNLUK" 2>/dev/null || [ -s /tmp/turkod_backend_port ]; then
+              echo "Arka uç başladı (${i}. saniye)."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "HATA: arka uç 60 saniyede başlamadı." >&2
+          cat "$GUNLUK" 2>/dev/null | tail -n 50 >&2 || true
+          tail -n 50 ../sonuc/arayuz-linux.log >&2 || true
+          exit 1
+      - name: Ekran görüntüsü al
         if: success()
         continue-on-error: true
         run: |
-          mkdir -p ../sonuc
-          xvfb-run -a -s "-screen 0 1400x900x24" bash -c '
-            dist/linux/TurKod/turkod_flutter > ../sonuc/arayuz-linux.log 2>&1 &
-            sleep 45
-            import -window root ../sonuc/ekran-linux.png
-            kill %1 2>/dev/null || true'
+          sleep 30
+          DISPLAY=:99 import -window root ../sonuc/ekran-linux.png
+      - name: Uygulamayı kapat
+        if: always()
+        run: |
+          # (Boş PID ile "kill 0" bu kabuğun kendi grubunu öldürürdü.)
+          if [ -n "${UYGULAMA_PID:-}" ]; then kill "$UYGULAMA_PID" 2>/dev/null || true; fi
+          if [ -n "${XVFB_PID:-}" ]; then kill "$XVFB_PID" 2>/dev/null || true; fi
       - name: Günlükleri topla
         if: always()
         run: |
@@ -138,15 +224,33 @@ jobs:
         run: python -m pip install -r ../requirements.txt
       - name: Derle (TurKod.app + .dmg, yerel imza)
         run: bash platformlar/macos/build_macos.sh --imzasiz
-      - name: Uygulamayı aç ve ekran görüntüsü al
+      # Uygulama açılır; arka uç (sunucu) gerçekten başlamazsa iş DÜŞER.
+      - name: Uygulamayı aç (arka uç başlamalı)
+        run: |
+          mkdir -p ../sonuc
+          PORT_DOSYASI="${TMPDIR:-/tmp}/turkod_backend_port"
+          rm -f "$PORT_DOSYASI"
+          open dist/macos/TurKod.app
+          GUNLUK="$HOME/Library/Application Support/TurKod/backend.log"
+          for i in $(seq 1 90); do
+            if grep -q "backend başlıyor" "$GUNLUK" 2>/dev/null || [ -s "$PORT_DOSYASI" ]; then
+              echo "Arka uç başladı (${i}. saniye)."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "HATA: arka uç 90 saniyede başlamadı." >&2
+          tail -n 50 "$GUNLUK" >&2 2>/dev/null || true
+          exit 1
+      - name: Ekran görüntüsü al
         if: success()
         continue-on-error: true
         run: |
-          mkdir -p ../sonuc
-          open dist/macos/TurKod.app
-          sleep 45
+          sleep 30
           screencapture -x ../sonuc/ekran-macos.png
-          osascript -e 'tell application id "org.turkod.TurKod" to quit' || true
+      - name: Uygulamayı kapat
+        if: always()
+        run: osascript -e 'tell application id "org.turkod.TurKod" to quit' || true
       - name: Günlükleri topla
         if: always()
         run: |

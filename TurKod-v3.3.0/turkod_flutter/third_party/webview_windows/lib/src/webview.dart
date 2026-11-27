@@ -573,14 +573,17 @@ class WebviewController extends ValueNotifier<WebviewValue> {
 
   /// TürKod (pencereli kip): taşıyıcıdan kesilen dikdörtgenler (taşıyıcıya
   /// göre, fiziksel piksel); oralarda alttaki Flutter öğeleri görünür.
-  Future<void> setClipRects(List<Rect> fiziksel) async {
+  /// [yaricaplar]: her dikdörtgenin köşe yarıçapı (fiziksel piksel; 0 keskin
+  /// köşe). Verilmezse 14.
+  Future<void> setClipRects(List<Rect> fiziksel, {List<double>? yaricaplar}) async {
     if (_isDisposed) return;
     await _methodChannel.invokeMethod('setClipRects', [
-      for (final r in fiziksel) ...[
-        r.left.floorToDouble(),
-        r.top.floorToDouble(),
-        r.right.ceilToDouble(),
-        r.bottom.ceilToDouble(),
+      for (var i = 0; i < fiziksel.length; i++) ...[
+        fiziksel[i].left.floorToDouble(),
+        fiziksel[i].top.floorToDouble(),
+        fiziksel[i].right.ceilToDouble(),
+        fiziksel[i].bottom.ceilToDouble(),
+        (yaricaplar != null && i < yaricaplar.length ? yaricaplar[i] : 14.0).roundToDouble(),
       ]
     ]);
   }

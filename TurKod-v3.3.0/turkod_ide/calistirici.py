@@ -36,7 +36,8 @@ except ImportError:
     from runner import runner_kodu_uret
     from cikti_cevirici import SatirCevirici
 
-CREATE_NO_WINDOW = 0x08000000
+# Yalnızca Windows'ta anlamlı; POSIX'te creationflags 0 dışı değer hata verir.
+CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 UZANTI = ".trpy"
 
 
@@ -169,7 +170,7 @@ def python_exe_bul():
 
 def _ortam():
     """ide_core.IDECore._subprocess_env ile aynı: `pip yükle` paketleri görünsün."""
-    env = dict(os.environ)
+    env = dict(platform_katmani.alt_surec_ortami(dict(os.environ)))
     # PyInstaller'ın tkinter kancası backend'in Tcl/Tk yollarını koyar;
     # kullanıcı programı (python_embed) kendi Tcl'ini kullanmalı, yoksa
     # sürümler ayrıştığında tkinter/turtle init.tcl hatasıyla açılmaz.
@@ -437,6 +438,17 @@ def _konsol_hazirla():
             pass
 
 
+def _sigint_isleyicisi():
+    """Konsol kipinde çalıştırıcının Ctrl+C sırasında kurduğu işleyici.
+    Windows'ta SIG_IGN (Ctrl+C olayı alt sürece konsoldan ayrıca gider).
+    Linux/macOS'ta SIG_IGN exec'ten sonra alt sürece miras kalıyor, program
+    Ctrl+C ile durmuyordu; boş bir işleyici ise alt süreçte varsayılana döner."""
+    import signal
+    if platform_katmani.windows_mu():
+        return signal.SIG_IGN
+    return lambda *_a: None
+
+
 def konsolda_calistir(yol, argumanlar=(), konsol_hazirla=True):
     if konsol_hazirla:
         _konsol_hazirla()
@@ -446,15 +458,16 @@ def konsolda_calistir(yol, argumanlar=(), konsol_hazirla=True):
         metin = _hata_metni(h.hatalar)
         sys.stderr.write(f"\x1b[91m{metin}\x1b[0m" if renkli else metin)
         return 1
-    try:
-        import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleW(f"{os.path.basename(h.yol)} — TürKod")
-    except Exception:  # noqa: BLE001
-        pass
+    if platform_katmani.windows_mu():
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(f"{os.path.basename(h.yol)} — TürKod")
+        except Exception:  # noqa: BLE001
+            pass
 
     import signal
     # Ctrl+C programa (alt sürece) gider; çalıştırıcı kendisi kapanmaz, çıkış kodunu bekler.
-    eski = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    eski = signal.signal(signal.SIGINT, _sigint_isleyicisi())
     try:
         surec = subprocess.Popen(h.komut, cwd=h.cwd, env=_ortam())
         return surec.wait()
@@ -670,7 +683,8 @@ def cli_main(argv):
         if kabuk_penceresi_ac():
             return 0
         _konsol_hazirla()
-        print("Kabuk penceresi açılamadı.", file=sys.stderr)
+        neden = platform_katmani.son_terminal_hatasi()
+        print("Kabuk penceresi açılamadı." + (f" {neden}" if neden else ""), file=sys.stderr)
         return 1
     if ilk.lower() in EXE_KOMUTLARI or ilk.lower() in KAYNAK_KOMUTLARI:
         _konsol_hazirla()
@@ -736,7 +750,59 @@ _AZAMI_SATIR = 20000
 _AZAMI_TIK_METNI = 200_000
 
 
+def _kisayol(harf):
+    """Terminal penceresindeki kısayolun ekran metni (macOS'ta Cmd: ⌘)."""
+    return f"⌘{harf}" if platform_katmani.macos_mu() else f"Ctrl+{harf}"
+
+
+def _tk_olcegi(kok):
+    """Pencere ölçeği. Windows'ta ekranın DPI'ı / 96. macOS'ta Tk ekranı 72 DPI
+    bildirir (0.75: pencere ve yazılar küçük kalıyordu); sistem zaten noktaları
+    ölçeklediği için 1. Linux'ta 96'nın altına inilmez."""
+    if platform_katmani.macos_mu():
+        return 1.0
+    try:
+        olcek = kok.winfo_fpixels("1i") / 96.0
+    except Exception:  # noqa: BLE001
+        return 1.0
+    if not platform_katmani.windows_mu():
+        olcek = max(1.0, olcek)
+    return olcek
+
+
+def _png_karsiligi(ikon):
+    """.ico'nun yanındaki aynı adlı .png; yoksa program-logo.png."""
+    if not ikon:
+        return None
+    for aday in (os.path.splitext(ikon)[0] + ".png",
+                 os.path.join(os.path.dirname(ikon), "program-logo.png")):
+        if os.path.exists(aday):
+            return aday
+    return None
+
+
+def _pencere_simgesi_kur(kok, ikon):
+    """Tk penceresinin simgesi: Windows'ta .ico (iconbitmap); Linux/macOS Tk
+    .ico okuyamaz, yanındaki .png iconphoto ile verilir."""
+    import tkinter as tk
+    if not ikon:
+        return
+    try:
+        if platform_katmani.windows_mu():
+            kok.iconbitmap(default=ikon)
+            return
+        png = _png_karsiligi(ikon)
+        if png:
+            resim = tk.PhotoImage(master=kok, file=png)
+            kok.iconphoto(True, resim)
+            kok._turkod_simge = resim   # çöp toplanmasın
+    except tk.TclError:
+        pass
+
+
 def _dpi_farkinda_ol():
+    if not platform_katmani.windows_mu():
+        return
     try:
         import ctypes
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -751,6 +817,8 @@ def _dpi_farkinda_ol():
 def _uygulama_kimligi():
     # Görev çubuğunda turkod_backend.exe'nin simgesi yerine pencerenin
     # (editor-logo.ico) simgesi görünsün ve terminaller ayrı gruplansın.
+    if not platform_katmani.windows_mu():
+        return
     try:
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("TurKod.Terminal")
@@ -763,6 +831,8 @@ def _koyu_baslik_cubugu(pencere):
     Windows 10, özellik çizimden SONRA verilirse çerçeveyi yeniden çizmez;
     başlık yazısı koyu temayla, zemini açık temayla kalır (beyaz zemin üstünde
     siyah kutulu yazı). SWP_FRAMECHANGED çerçeveyi zorla yeniden çizdirir."""
+    if not platform_katmani.windows_mu():
+        return
     try:
         import ctypes
         from ctypes import wintypes
@@ -798,12 +868,7 @@ def pencerede_goster_hata(mesaj):
         from tkinter import messagebox
         kok = tk.Tk()
         kok.withdraw()
-        ikon = ikon_yolu()
-        if ikon:
-            try:
-                kok.iconbitmap(default=ikon)
-            except tk.TclError:
-                pass
+        _pencere_simgesi_kur(kok, ikon_yolu())
         messagebox.showerror("TürKod", mesaj, parent=kok)
         kok.destroy()
     except Exception:  # noqa: BLE001
@@ -855,14 +920,9 @@ class TerminalPenceresi:
             pass
         kok.title(f"{self.ad} — TürKod")
         kok.configure(bg=RENK["zemin"])
-        ikon = ikon_yolu()
-        if ikon:
-            try:
-                kok.iconbitmap(default=ikon)
-            except tk.TclError:
-                pass
+        _pencere_simgesi_kur(kok, ikon_yolu())
 
-        olcek = kok.winfo_fpixels("1i") / 96.0
+        olcek = _tk_olcegi(kok)
         self.o = lambda px: max(1, int(round(px * olcek)))
         en, boy = self.o(980), self.o(620)
         x = max(0, (kok.winfo_screenwidth() - en) // 2)
@@ -979,7 +1039,7 @@ class TerminalPenceresi:
         self.d_durdur.pack(side="left", padx=(0, self.o(6)))
         if editor_exe_bul() or not _paketli_mi():
             d = self._dugme(sag, "✎  Editörde aç", self.editorde_ac,
-                            "Dosyayı TürKod editöründe aç (Ctrl+E)")
+                            f"Dosyayı TürKod editöründe aç ({_kisayol('E')})")
             d.pack(side="left")
 
     def _nokta_ciz(self, renk):
@@ -1045,8 +1105,10 @@ class TerminalPenceresi:
         self.ipucu = tk.Label(alt, text="", font=self.f_ui_kucuk, fg=RENK["soluk"],
                               bg=RENK["panel"], anchor="w")
         self.ipucu.pack(side="left", fill="x", expand=True)
-        self.varsayilan_ipucu = ("F5 yeniden çalıştır  ·  Ctrl+C durdur  ·  Ctrl+L temizle  ·  "
-                                 "Ctrl+E editörde aç  ·  ↑/↓ önceki girdiler")
+        # Ctrl+C her sistemde durdurur (macOS Terminal'inde de Ctrl+C'dir).
+        self.varsayilan_ipucu = (f"F5 yeniden çalıştır  ·  Ctrl+C durdur  ·  "
+                                 f"{_kisayol('L')} temizle  ·  "
+                                 f"{_kisayol('E')} editörde aç  ·  ↑/↓ önceki girdiler")
         self._ipucu_goster("")
         tk.Label(alt, text=f"TürKod {surum()}  ·  UTF-8", font=self.f_ui_kucuk,
                  fg=RENK["soluk"], bg=RENK["panel"]).pack(side="right")
@@ -1086,6 +1148,12 @@ class TerminalPenceresi:
             self.kok.bind(k, lambda e: (self.yeniden_calistir(), "break")[1])
         for k in ("<Control-e>", "<Control-E>"):
             self.kok.bind(k, lambda e: (self.editorde_ac(), "break")[1])
+        if platform_katmani.macos_mu():
+            # macOS'ta ipuçları Cmd gösterir; Ctrl kısayolları da çalışmaya devam eder.
+            t.bind("<Command-l>", lambda e: (self.temizle(), "break")[1])
+            t.bind("<Command-a>", self._tumunu_sec)
+            self.kok.bind("<Command-r>", lambda e: (self.yeniden_calistir(), "break")[1])
+            self.kok.bind("<Command-e>", lambda e: (self.editorde_ac(), "break")[1])
         self.kok.bind("<Escape>", lambda e: self.kapat() if self.surec is None else None)
 
     def _calisiyor(self):

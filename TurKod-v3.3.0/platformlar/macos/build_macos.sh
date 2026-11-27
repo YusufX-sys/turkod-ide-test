@@ -97,6 +97,7 @@ KAYNAK="$APP/Contents/Resources"
 cp -R "$DIST/backend" "$KAYNAK/backend"
 if [ -d "$KOK/belgeler" ]; then
     cp -R "$KOK/belgeler" "$KAYNAK/belgeler"
+    rm -f "$KAYNAK/belgeler/KITAP_BAKIM.md"   # iç belge (kitabın bakımı): pakete girmez
 else
     echo "UYARI: belgeler/ yok; kitap ve lisanslar pakete girmeyecek." >&2
 fi

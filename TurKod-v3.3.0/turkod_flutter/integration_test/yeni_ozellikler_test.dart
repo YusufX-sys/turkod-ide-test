@@ -49,6 +49,8 @@ Future<bool> _kosulBekle(WidgetTester t, bool Function() kosul,
 }
 
 Future<void> _ekran(String ad) async {
+  // Betik PowerShell'dir: yalnızca Windows'ta çalıştırılır.
+  if (!Platform.isWindows) return;
   final betik = Platform.environment['TURKOD_EKRAN_BETIGI'];
   if (betik == null || betik.isEmpty) return;
   final cikti = p.join(p.dirname(betik), 'ekran_$ad.png');

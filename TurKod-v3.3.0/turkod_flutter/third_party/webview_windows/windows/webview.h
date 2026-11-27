@@ -137,7 +137,9 @@ class Webview {
   void SetWindowVisible(bool visible);
   // Taşıyıcıdan kesilen dikdörtgenler (taşıyıcıya göre): üstteki Flutter
   // öğeleri (Kodi, balonu) oralarda görünür. Boş liste: kesme yok.
-  void SetClipRects(const std::vector<RECT>& rects);
+  // radii[i]: i. dikdörtgenin köşe yarıçapı (0: keskin köşe; Kodi'nin
+  // silüetini oluşturan küçük parçalar).
+  void SetClipRects(const std::vector<RECT>& rects, const std::vector<int>& radii);
   // Sayfanın PNG görüntüsü (menü / iletişim kutusu açıkken yerine konur).
   void CapturePreview(CapturePreviewCallback callback);
 

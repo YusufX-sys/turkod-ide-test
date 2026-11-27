@@ -1,4 +1,5 @@
-"""Kodi'nin kulağı ve sesi (yalnızca Windows, ek paket gerekmez).
+"""Kodi'nin kulağı ve sesi. Windows'ta ek paket gerekmez; Linux'ta bir kayıt
+programı (arecord / parecord / SoX), macOS'ta mikrofon için SoX kullanılır.
 
 - dinle(): mikrofonu winmm (waveIn) ile ctypes üzerinden dinler; konuşma
   başlayınca kaydeder, sessizlik gelince durur ve WAV baytlarını döndürür.

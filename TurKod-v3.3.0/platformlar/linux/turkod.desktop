@@ -9,4 +9,4 @@ Terminal=false
 Categories=Development;Education;IDE;
 MimeType=text/x-turkod;
 Keywords=python;programlama;kodlama;türkçe;
-StartupWMClass=turkod_flutter
+StartupWMClass=org.turkod.TurKod

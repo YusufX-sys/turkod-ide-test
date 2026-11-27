@@ -12,6 +12,7 @@ import json
 import os
 import queue
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -46,6 +47,7 @@ try:
     from . import kodi_goruntu
     from . import kodi_ses
     from . import platform_katmani
+    from . import kod_adlari
     from .calistirici import surum as program_surumu
     from .ai import AI_MODELLERI, AIIstekHatasi, saglayici_kimligi
 except ImportError:
@@ -73,6 +75,7 @@ except ImportError:
     import kodi_goruntu
     import kodi_ses
     import platform_katmani
+    import kod_adlari
     from calistirici import surum as program_surumu
     from ai import AI_MODELLERI, AIIstekHatasi, saglayici_kimligi
 
@@ -185,6 +188,24 @@ for _b in range(0x80, 0xA0):
         _CP1254_TANIMSIZ.add(_b)
 _C1_HATA_ISLEYICI = "turkod_c1"
 codecs.register_error(_C1_HATA_ISLEYICI, _c1_hata_isleyici)
+
+
+def _umask_oku():
+    # os.umask yalnızca değiştirerek okunabilir; içe aktarma anında (tek iş
+    # parçacığıyken) bir kez okunur, sonradan iş parçacıkları yarışmasın.
+    try:
+        deger = os.umask(0)
+        os.umask(deger)
+        return deger
+    except (AttributeError, OSError):
+        return 0o022
+
+
+_UMASK = _umask_oku()
+
+
+def _umask():
+    return _UMASK
 
 
 def _dosya_hatasi(e):
@@ -438,7 +459,9 @@ class IDECore:
         return yol
 
     def _subprocess_env(self):
-        env = dict(os.environ)
+        # Sisteme göre düzeltilmiş ortam (Linux paketinde PyInstaller'ın
+        # LD_LIBRARY_PATH'i geri alınır, macOS'ta PATH'e Homebrew eklenir).
+        env = dict(platform_katmani.alt_surec_ortami(dict(os.environ)))
         # PyInstaller'ın tkinter kancası backend'in Tcl/Tk yollarını koyar;
         # kullanıcı programı (python_embed) kendi Tcl'ini kullanmalı, yoksa
         # sürümler ayrıştığında tkinter/turtle init.tcl hatasıyla açılmaz.
@@ -707,6 +730,13 @@ class IDECore:
                             shutil.copymode(hedef, gecici)
                         except OSError:
                             pass
+                    elif os.name != "nt":
+                        # mkstemp dosyayı 0600 açar; yeni dosya da diğer
+                        # programların açtığı gibi umask'a göre izin almalı.
+                        try:
+                            os.chmod(gecici, 0o666 & ~_umask())
+                        except OSError:
+                            pass
                     for deneme in range(5):
                         try:
                             os.replace(gecici, hedef)
@@ -779,8 +809,9 @@ class IDECore:
         if not yol or not os.path.exists(yol):
             return {"ok": False, "hata": "Öğe bulunamadı."}
         hedef = os.path.join(os.path.dirname(yol), ad)
-        # Yalnızca büyük/küçük harf değişiyorsa (Windows'ta aynı dosya) izin ver.
-        if os.path.exists(hedef) and os.path.normcase(hedef) != os.path.normcase(yol):
+        # Yalnızca büyük/küçük harf değişiyorsa (Windows'ta ve macOS'ta aynı
+        # dosya) izin ver: hedef var ama aslında aynı öğeyse ad değişikliğidir.
+        if os.path.exists(hedef) and not self._ayni_oge_mi(hedef, yol):
             return {"ok": False, "hata": f"'{ad}' zaten var."}
         eski_anahtar = self._bicim_anahtari(yol)
         try:
@@ -791,6 +822,13 @@ class IDECore:
         # dosya sonraki kayıtta sessizce UTF-8 + CRLF yazılıyordu.
         self._bicimleri_tasi(eski_anahtar, hedef)
         return {"ok": True, "eski": yol, "yol": hedef, "isim": ad}
+
+    @staticmethod
+    def _ayni_oge_mi(hedef, yol):
+        try:
+            return os.path.samefile(hedef, yol)
+        except OSError:
+            return os.path.normcase(hedef) == os.path.normcase(yol)
 
     @staticmethod
     def _cop_kutusu_var_mi(yol):
@@ -1345,9 +1383,12 @@ class IDECore:
         tarafında yapıp sonucu Flutter'a gönderiyoruz.
 
         Sırasıyla:
-          1) tkinter.font.families() (Tk kurulu ise en güvenilir yöntem)
-          2) matplotlib.font_manager (Tk yoksa / başsız ortamda)
-          3) Küçük bir sabit yedek liste (ikisi de yoksa)
+          Windows: GDI ile numaralandırma, olmazsa tkinter.font.families()
+          Linux/macOS: platform_katmani.yazi_tipi_aileleri() (fc-list / ayrı
+            süreçte Tk). Bu işlev sunucunun yardımcı iş parçacığında çalışır;
+            macOS'ta Tk penceresi ana iş parçacığı dışında açılınca süreç
+            çöker, bu yüzden Windows dışında Tk bu süreçte hiç açılmaz.
+          Hiçbiri olmazsa küçük bir sabit yedek liste.
         """
         onbellek = getattr(self, "_font_onbellek", None)
         if onbellek is not None:
@@ -1356,48 +1397,40 @@ class IDECore:
         fonts = set()
         kaynak = None
 
-        # 0) Windows: GDI ile doğrudan numaralandırma. tkinter yolu görünmez
-        #    bir Tk penceresi açıp Tcl/Tk'yı kalıcı olarak belleğe yüklüyordu;
-        #    bu yol hafiftir ve ek kütüphane gerektirmez.
         if platform_katmani.windows_mu():
+            # GDI ile doğrudan numaralandırma. tkinter yolu görünmez bir Tk
+            # penceresi açıp Tcl/Tk'yı kalıcı olarak belleğe yüklüyordu; bu
+            # yol hafiftir ve ek kütüphane gerektirmez.
             try:
                 fonts = self._win_font_aileleri()
                 if fonts:
                     kaynak = "windows_gdi"
             except Exception:
                 fonts = set()
+            if not fonts:
+                try:
+                    import tkinter as tk
+                    import tkinter.font as tkfont
 
-        try:
-            if fonts:
-                raise StopIteration  # zaten bulundu; Tk'yı hiç yükleme
-            import tkinter as tk
-            import tkinter.font as tkfont
-
-            root = tk.Tk()
+                    root = tk.Tk()
+                    try:
+                        root.withdraw()
+                        fonts.update(f for f in tkfont.families()
+                                     if f and not f.startswith("@"))
+                        kaynak = "tkinter"
+                    finally:
+                        root.destroy()
+                except Exception:
+                    fonts = set()
+        else:
             try:
-                root.withdraw()
-                fonts.update(f for f in tkfont.families() if f and not f.startswith("@"))
-                kaynak = "tkinter"
-            finally:
-                root.destroy()
-        except StopIteration:
-            pass
-        except Exception:
-            fonts = set()
-
-        # matplotlib çok ağırdır (onlarca MB, saniyeler); yalnızca Windows
-        # dışında ve diğer yollar başarısızsa denenir.
-        if not fonts and not platform_katmani.windows_mu():
-            try:
-                from matplotlib import font_manager
-
-                for f in font_manager.fontManager.ttflist:
-                    if f.name:
-                        fonts.add(f.name)
-                if fonts:
-                    kaynak = "matplotlib"
+                aileler = platform_katmani.yazi_tipi_aileleri()
             except Exception:
-                fonts = set()
+                aileler = None
+            if aileler:
+                fonts.update(f for f in aileler if f and not f.startswith("@"))
+                if fonts:
+                    kaynak = "sistem"
 
         if not fonts:
             fonts = set(self._FONT_FALLBACK)
@@ -2562,7 +2595,8 @@ class IDECore:
         hazir, _ = self.ai_hazir_mi(gorev)
         return {"ok": True, "hazir": hazir, **(self._ai_kaynak(gorev) if hazir else {})}
 
-    def kodi_sor(self, mesaj, dusunme=None, baglam=None, otomatik=False):
+    def kodi_sor(self, mesaj, dusunme=None, baglam=None, otomatik=False,
+                 pencere_goruntusu=None):
         """Kodi'ye soru: kimliği + programın katalogu + arayüzün şu anki
         durumuyla sorulur. Her istek aynı yapıdadır; mesajın kelimelerine
         bakılarak hiçbir şey seçilmez. Model işlerini şablonla (eylem aracı ya
@@ -2631,7 +2665,7 @@ class IDECore:
             dusunme = bool(self.ayarlar.get("kodi_dusunme"))
         # Ayarlar → Kodi: mesajla birlikte ekranın / TürKod penceresinin
         # görüntüsü (yalnızca model görsel görebiliyorsa).
-        gorsel, goruntu = self._kodi_goruntusu(gorev)
+        gorsel, goruntu = self._kodi_goruntusu(gorev, pencere_goruntusu)
         # Görüntü istendi ama gitmediyse model ekranı görmüş gibi konuşmasın.
         goruntu_notu = ("\n(Not: Kullanıcı ekran görüntüsü göndermek istedi ama görüntü sana "
                         "ulaşmadı; ekranı göremiyorsun. Ekranla ilgili soruda bunu söyle, yalnızca "
@@ -2673,6 +2707,10 @@ class IDECore:
             #    şey yapmıyordu. Yazıdaki sözlere bakılmaz, yalnızca şablon okunur.
             _, gecerli = kodi_bilgisi.eylemleri_ayir(cevap, baglam)
             gecerli = [e for e in gecerli if e["eylem"] != "kilavuz"]
+            # Yalnızca "ifade" (Kodi'nin hâli) yazılmışsa şablona uyulmamıştır:
+            # iş söz verilip verilmediğine yine bakılır.
+            yalniz_ifade = bool(gecerli) and not any(kodi_bilgisi.is_eylemi(e) for e in gecerli)
+            gecerli = [e for e in gecerli if kodi_bilgisi.is_eylemi(e)]
             hatali = kodi_bilgisi.gecersiz_eylemler(cevap, baglam)
             duzeltme = ""
             zorunlu = True
@@ -2682,7 +2720,7 @@ class IDECore:
                             + json.dumps(hatali, ensure_ascii=False)[:400] + ". Neden: " + nedenler
                             + ". Eylemi bu alanlarla yeniden yaz. Yapamıyorsan nedenini kısaca "
                               "söyle ve {\"eylem\": \"yok\"} yaz.")
-            elif not gecerli and not kodi_bilgisi.eylem_sablonu_var(cevap) and \
+            elif not gecerli and (yalniz_ifade or not kodi_bilgisi.eylem_sablonu_var(cevap)) and \
                     self._kodi_is_vaadi(mesaj, cevap, baglam, gorev, otomatik):
                 # Eylemsiz cevap: önce minik bir soruyla bir iş söz verilip
                 # verilmediğine bakılır. Eskiden her düz sohbet cevabında
@@ -2740,10 +2778,15 @@ class IDECore:
         metin, eylemler = kodi_bilgisi.eylemleri_ayir(cevap, baglam)
         # "yok" ve "kilavuz" arayüze gitmez (motorun kendi işleri).
         eylemler = [e for e in eylemler if e["eylem"] not in ("yok", "kilavuz")]
+        ifade, eylemler = kodi_bilgisi.ifadeyi_ayir(eylemler)
         if not metin.strip() and not eylemler:
             metin = ("Bunu yapamadım; işin bir parçası eksik kaldı. Bir daha dener misin, ya da "
                      "biraz daha anlatır mısın?")
-        return self._kodi_cevabi(metin, eylemler, goruntu, gorev, mesaj, baglam)
+        sonuc = self._kodi_cevabi(metin, eylemler, goruntu, gorev, mesaj, baglam)
+        if ifade:
+            # Kodi'nin hâli (yüz, poz, hareket, efekt): balonda iş kartı olmaz.
+            sonuc["ifade"] = ifade
+        return sonuc
 
     def _kodi_asil_istekle(self, mesaj, otomatik):
         """Kodi'nin kendi sürdürdüğü tarayıcı adımına ("Sayfa açıldı, isteğime
@@ -2998,18 +3041,29 @@ class IDECore:
             h = sonuc.hatalar[0]
             return (f"TürKod'a çevrilince satır {h.satir} bozuluyor ({h.mesaj}); o satırı sade, "
                     "alışılmış Python ile yaz (ör. modülü `import x` ile al, `__import__` kullanma)")
+        # Model olmayan komut uydurabiliyor (`turtle.save()`, `turtle.restore()`):
+        # yalnızca sözdizimi denetlenince kod editöre yazılıyor, çalışınca
+        # AttributeError veriyordu. Adlar kullanıcının Python'unda aranır.
+        olmayan = kod_adlari.olmayan_adlar(py, platform_katmani.kullanici_python_bul())
+        if olmayan:
+            liste = ", ".join(f"satır {sat}: `{ad}`" for sat, ad in olmayan[:6])
+            return (f"bu komutlar modüllerinde yok, çalışınca AttributeError verir: {liste}. "
+                    "Yalnızca modülün gerçekten var olan komutlarını kullan (ör. turtle'da "
+                    "save/restore yok; konumu `turtle.position()` ile alıp `turtle.goto()` ile dön)")
         return ""
 
-    def _kodi_goruntusu(self, gorev):
+    def _kodi_goruntusu(self, gorev, pencere_goruntusu=None):
         """(base64 JPEG ya da None, durum). durum: None (kapalı), "gitti",
-        "desteklenmiyor" (model görsel görmüyor), "alinamadi"."""
+        "desteklenmiyor" (model görsel görmüyor), "alinamadi".
+        pencere_goruntusu: arayüzün kendi penceresinden aldığı PNG (base64);
+        Linux/macOS'ta "yalnızca TürKod penceresi" kipi bununla çalışır."""
         kip = str(self.ayarlar.get("kodi_goruntu") or "kapali")
         if kip not in ("pencere", "ekran"):
             return None, None
         a = self._gorev_atamasi(gorev)
         if not a or not ai_katalogu.gorsel_destekler(a[0], a[1]):
             return None, "desteklenmiyor"
-        gorsel, _ = kodi_goruntu.yakala(kip)
+        gorsel, _ = kodi_goruntu.yakala(kip, hazir=pencere_goruntusu)
         return (gorsel, "gitti") if gorsel else (None, "alinamadi")
 
     def kodi_goruntu_dene(self):
@@ -3813,6 +3867,8 @@ class IDECore:
         olmalı; ayara kaydedilir."""
         dizin = (dizin or "").strip()
         if dizin:
+            # "~/Modeller" gibi yollar (özellikle Linux/macOS'ta) ev klasörüne açılır.
+            dizin = os.path.expanduser(dizin)
             try:
                 os.makedirs(dizin, exist_ok=True)
                 deneme = os.path.join(dizin, ".turkod_yazma_denemesi")
@@ -5734,16 +5790,18 @@ class IDECore:
 
     _CD_DESEN = re.compile(r"(?i)(?:cd|chdir)(?=$|[\s.\\/])(?:\s*/d(?=\s))?\s*(.*)")
     _SURUCU_DESEN = re.compile(r"(?i)[a-z]:")
+    _CD_DESEN_POSIX = re.compile(r"(?:cd|chdir)(?=$|\s)\s*(.*)", re.DOTALL)
 
     def _terminal_cd(self, komut, on_output=None, oturum=None):
         """cd / cd /d X / cd .. / chdir X / "D:" komutlarını terminalin kalıcı
         çalışma klasörünü değiştirerek uygular. Komut bunlardan biri değilse
         (ya da "cd x && dir" gibi birleşikse) None döner; kabukta çalışır."""
-        if any(c in komut for c in "&|<>"):
+        windows = platform_katmani.windows_mu()
+        if any(c in komut for c in ("&|<>" if windows else "&|<>;`")):
             return None
-        if self._SURUCU_DESEN.fullmatch(komut):
+        if windows and self._SURUCU_DESEN.fullmatch(komut):
             hedef = komut + os.sep
-        else:
+        elif windows:
             m = self._CD_DESEN.fullmatch(komut)
             if not m:
                 return None
@@ -5752,6 +5810,20 @@ class IDECore:
                 # Yalnızca "cd": geçerli klasörü yazar (cmd'deki gibi).
                 self._guvenli_callback(on_output, self._terminal_cwd(oturum) + "\n")
                 return {"ok": True, "kip": "cd", "dizin": self._terminal_cwd(oturum)}
+            hedef = os.path.expandvars(os.path.expanduser(hedef))
+        else:
+            # Linux/macOS kabuğu (sh): tırnaklar shlex ile çözülür, yalnızca
+            # "cd" ev klasörüne gider; "/d" ve sürücü harfi yoktur.
+            m = self._CD_DESEN_POSIX.fullmatch(komut.strip())
+            if not m:
+                return None
+            try:
+                parcalar = shlex.split(m.group(1))
+            except ValueError:
+                return None
+            if len(parcalar) > 1 or parcalar == ["-"]:
+                return None   # "cd a b", "cd -": kabuk kendisi yanıtlasın
+            hedef = parcalar[0] if parcalar else "~"
             hedef = os.path.expandvars(os.path.expanduser(hedef))
         yeni = os.path.normpath(os.path.join(self._terminal_cwd(oturum), hedef))
         if not os.path.isdir(yeni):
@@ -5788,11 +5860,40 @@ class IDECore:
             exe = platform_katmani.turkod_komutu_dosyasi()
             if not os.path.exists(exe):
                 return komut, None
-            on = f'"{exe}"'
+            on = self._kabuk_tirnak(exe)
         else:
             kok = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            on = f'"{sys.executable}" -X utf8 "{os.path.join(kok, "backend_main.py")}" --turkod'
+            on = (f'{self._kabuk_tirnak(sys.executable)} -X utf8 '
+                  f'{self._kabuk_tirnak(os.path.join(kok, "backend_main.py"))} --turkod')
         return f"{on} {kalan}".rstrip(), None
+
+    @staticmethod
+    def _kabuk_tirnak(yol):
+        """Yolu kabuk komutuna güvenle koyar. Windows'ta (cmd) çift tırnak;
+        Linux/macOS'ta (sh) çift tırnağın içinde $ ` " \\ kaçırılır (shlex.quote
+        ile eşdeğer güvenlik), yoksa "$" ya da "`" içeren yol komut olarak açılırdı."""
+        if platform_katmani.windows_mu():
+            return f'"{yol}"'
+        # Ters eğik çizgi çift tırnak içinde yalnızca $ ` " \ önünde ve sonda özeldir.
+        return '"' + re.sub(r'(["$`]|\\(?=["$`\\]|$))', r'\\\1', yol) + '"'
+
+    _PYTHON_KOMUTU = re.compile(r"^python(?=\s|$)")
+
+    def _python_komutunu_yonlendir(self, komut, python_exe, env=None):
+        """Linux/macOS'ta çoğu zaman `python` komutu yoktur (yalnızca python3).
+        Terminalde "python ..." yazılınca TürKod'un kullandığı Python'a gider."""
+        if platform_katmani.windows_mu():
+            return komut
+        komut_bas = komut.lstrip()
+        if not self._PYTHON_KOMUTU.match(komut_bas):
+            return komut
+        yol = (env or {}).get("PATH")
+        if shutil.which("python", path=yol):
+            return komut
+        hedef = python_exe or shutil.which("python3", path=yol)
+        if not hedef:
+            return komut
+        return self._kabuk_tirnak(hedef) + komut_bas[len("python"):]
 
     def _terminal_komut_calistir(self, komut, on_output=None, oturum=None):
         try:
@@ -5808,6 +5909,8 @@ class IDECore:
             if yeni_komut:
                 komut = yeni_komut
             cwd = self._terminal_cwd(oturum)
+            ortam = self._terminal_ortami(oturum)
+            komut = self._python_komutunu_yonlendir(komut, python_exe, ortam)
 
             # * env: kullanıcı paket klasörü (pip yükle ile kurulanlar) ve
             #   UTF-8 çıktı; eskiden terminalde "python app.py" kurulu paketi
@@ -5824,7 +5927,7 @@ class IDECore:
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env=self._terminal_ortami(oturum),
+                env=ortam,
                 **self._subprocess_flags()
             )
             self._kabuk_surecleri[proc] = oturum

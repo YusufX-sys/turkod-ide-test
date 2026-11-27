@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import 'platform_ayarlari.dart';
+
 const String kGithubUrl = 'https://github.com/YusufX-sys/turkod-ide';
 const String kHataBildirUrl = '$kGithubUrl/issues';
 const String kSiteUrl = 'https://yusufx-sys.github.io/turkod-site/';
@@ -33,19 +35,13 @@ String? belgeYolu(String ad, {String? baslangic}) {
   return null;
 }
 
-/// Bağlantıyı, e-postayı (mailto:) ya da dosyayı Windows'un varsayılan
-/// uygulamasıyla açar (tarayıcı, e-posta istemcisi, PDF okuyucu).
+/// Bağlantıyı, e-postayı (mailto:) ya da dosyayı sistemin varsayılan
+/// uygulamasıyla açar (tarayıcı, e-posta istemcisi, PDF okuyucu). Komut
+/// sisteme göre platform_ayarlari.disaridaAcKomutu'ndan gelir.
 Future<bool> disaridaAc(String hedef) async {
   try {
-    if (Platform.isWindows) {
-      // cmd "start" yerine: & ve boşluk içeren yollar/bağlantılar bölünmez.
-      await Process.start('rundll32', ['url.dll,FileProtocolHandler', hedef],
-          mode: ProcessStartMode.detached);
-    } else if (Platform.isMacOS) {
-      await Process.start('open', [hedef], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start('xdg-open', [hedef], mode: ProcessStartMode.detached);
-    }
+    final k = disaridaAcKomutu(hedef);
+    await Process.start(k.komut, k.argumanlar, mode: ProcessStartMode.detached);
     return true;
   } catch (_) {
     return false;

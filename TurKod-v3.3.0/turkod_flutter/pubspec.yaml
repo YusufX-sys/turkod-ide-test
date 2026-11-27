@@ -23,6 +23,7 @@ dependencies:
   # Değiştirilmiş kopya (tekerlek düzeltmesi): third_party/webview_windows/TURKOD_DEGISIKLIKLERI.md
   webview_windows:
     path: third_party/webview_windows
+  webview_flutter: ^4.14.1
 
 dev_dependencies:
   flutter_test:

@@ -48,8 +48,9 @@ def _turkod_penceresi():
     return bulunan[0] if bulunan else None
 
 
-def yakala(kip):
-    """(base64 JPEG ya da None, açıklama)."""
+def yakala(kip, hazir=None):
+    """(base64 JPEG ya da None, açıklama). hazir: "pencere" kipinde arayüzün kendi
+    penceresinden aldığı görüntü (base64 PNG); Linux/macOS'ta pencere böyle gelir."""
     if kip not in ("pencere", "ekran"):
         return None, "kapalı"
     try:
@@ -57,12 +58,14 @@ def yakala(kip):
     except ImportError:
         return None, "görüntü kütüphanesi yok"
     try:
-        if kip == "pencere":
+        if kip == "pencere" and hazir:
+            resim = Image.open(io.BytesIO(base64.b64decode(hazir)))
+            resim.load()
+        elif kip == "pencere":
             if not platform_katmani.windows_mu():
                 # TürKod penceresini bulmak Windows'a özgü; ekranın tamamı
                 # gönderilmez (kullanıcı yalnızca TürKod penceresini seçmişti).
-                return None, ("yalnızca TürKod penceresi kipi bu sistemde yok; Ayarlar → "
-                              "Kodi'de 'ekran' seçilebilir")
+                return None, "TürKod penceresinin görüntüsü gelmedi"
             kutu = _turkod_penceresi()
             if kutu is None:
                 return None, "TürKod penceresi görünmüyor"

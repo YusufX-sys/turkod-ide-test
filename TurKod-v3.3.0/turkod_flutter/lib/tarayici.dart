@@ -79,13 +79,189 @@ class TarayiciOgesi {
   Map<String, dynamic> json() => {'no': no, 'tur': tur, 'metin': metin, if (sifre) 'sifre': true};
 }
 
+/// Sayfayı çizen motor. Windows: WebView2 (TürKod penceresinin içinde kendi
+/// penceresiyle çizilir; Flutter üstüne çizemez, bu yüzden kesik ve anlık
+/// görüntü gerekir). macOS: WKWebView (webview_flutter; Flutter görünümüne
+/// gömülüdür, menüler ve Kodi doğrudan üstüne çizilir).
+abstract class SayfaMotoru {
+  /// Ayrı pencerede mi çiziliyor (WebView2)? Gömülüyse [gorunum] kullanılır.
+  bool get pencereli;
+  Widget? get gorunum => null;
+  Stream<String> get url;
+  Stream<String> get title;
+  Stream<HistoryChanged> get historyChanged;
+  Stream<LoadingState> get loadingState;
+  Future<void> baslat();
+  Future<dynamic> executeScript(String betik);
+  Future<void> loadUrl(String adres);
+  Future<void> goBack();
+  Future<void> goForward();
+  Future<void> reload();
+  Future<void> stop();
+  Future<Uint8List?> capturePreview() async => null;
+  Future<void> setWindowBounds(Rect fiziksel) async {}
+  Future<void> setWindowVisible(bool gorunur) async {}
+  /// [yaricaplar]: her kesiğin köşe yarıçapı (fiziksel piksel; 0 keskin).
+  Future<void> setClipRects(List<Rect> fiziksel, List<double> yaricaplar) async {}
+  Future<void> suspend() async {}
+  Future<void> resume() async {}
+  Future<void> dispose();
+}
+
+class _WebView2Motoru extends SayfaMotoru {
+  final WebviewController _w = WebviewController();
+  @override
+  bool get pencereli => true;
+  @override
+  Stream<String> get url => _w.url;
+  @override
+  Stream<String> get title => _w.title;
+  @override
+  Stream<HistoryChanged> get historyChanged => _w.historyChanged;
+  @override
+  Stream<LoadingState> get loadingState => _w.loadingState;
+  @override
+  Future<void> baslat() async {
+    await _w.initialize(windowed: true);
+    await _w.setPopupWindowPolicy(WebviewPopupWindowPolicy.sameWindow);
+    // WebView2 kendini Edge diye tanıtınca Google her açılışta "Chrome'u
+    // indir / Google'ı kullan" paneli gösteriyordu. Sayfa motoru zaten
+    // Chromium: kimlikten "Edg/..." çıkarılır.
+    try {
+      final kimlik = await _w.executeScript('navigator.userAgent');
+      if (kimlik is String) {
+        final yeni = kromKimligi(kimlik);
+        if (yeni != kimlik) await _w.setUserAgent(yeni);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Future<dynamic> executeScript(String betik) => _w.executeScript(betik);
+  @override
+  Future<void> loadUrl(String adres) => _w.loadUrl(adres);
+  @override
+  Future<void> goBack() => _w.goBack();
+  @override
+  Future<void> goForward() => _w.goForward();
+  @override
+  Future<void> reload() => _w.reload();
+  @override
+  Future<void> stop() => _w.stop();
+  @override
+  Future<Uint8List?> capturePreview() => _w.capturePreview();
+  @override
+  Future<void> setWindowBounds(Rect fiziksel) => _w.setWindowBounds(fiziksel);
+  @override
+  Future<void> setWindowVisible(bool gorunur) => _w.setWindowVisible(gorunur);
+  @override
+  Future<void> setClipRects(List<Rect> fiziksel, List<double> yaricaplar) =>
+      _w.setClipRects(fiziksel, yaricaplar: yaricaplar);
+  @override
+  Future<void> suspend() => _w.suspend();
+  @override
+  Future<void> resume() => _w.resume();
+  @override
+  Future<void> dispose() => _w.dispose();
+}
+
+/// macOS: WKWebView (webview_flutter). Betik sonuçları JSON olarak döner
+/// (WebView2'deki gibi Map / List / sayı / yazı).
+class _WkMotoru extends SayfaMotoru {
+  final wf.WebViewController _w = wf.WebViewController();
+  final _url = StreamController<String>.broadcast();
+  final _baslik = StreamController<String>.broadcast();
+  final _gecmis = StreamController<HistoryChanged>.broadcast();
+  final _yukleme = StreamController<LoadingState>.broadcast();
+
+  @override
+  bool get pencereli => false;
+  @override
+  Widget get gorunum => wf.WebViewWidget(controller: _w);
+  @override
+  Stream<String> get url => _url.stream;
+  @override
+  Stream<String> get title => _baslik.stream;
+  @override
+  Stream<HistoryChanged> get historyChanged => _gecmis.stream;
+  @override
+  Stream<LoadingState> get loadingState => _yukleme.stream;
+
+  Future<void> _durumuBildir() async {
+    try {
+      final u = await _w.currentUrl();
+      if (u != null) _url.add(u);
+      _baslik.add(await _w.getTitle() ?? '');
+      _gecmis.add(HistoryChanged(await _w.canGoBack(), await _w.canGoForward()));
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> baslat() async {
+    await _w.setJavaScriptMode(wf.JavaScriptMode.unrestricted);
+    await _w.setNavigationDelegate(wf.NavigationDelegate(
+      onPageStarted: (u) {
+        _url.add(u);
+        _yukleme.add(LoadingState.loading);
+      },
+      onPageFinished: (u) async {
+        // Yeni sekmede açılan bağlantılar (target=_blank) aynı sayfada açılsın
+        // (WebView2'deki sameWindow ilkesi gibi; WKWebView onları hiç açmıyordu).
+        await _w
+            .runJavaScript("document.querySelectorAll('a[target=_blank]')"
+                ".forEach(a => a.target = '_self');"
+                "window.open = (u) => { if (u) location.href = u; return window; };")
+            .catchError((_) {});
+        await _durumuBildir();
+        _yukleme.add(LoadingState.navigationCompleted);
+      },
+      onUrlChange: (d) {
+        if (d.url != null) _url.add(d.url!);
+        _durumuBildir();
+      },
+    ));
+  }
+
+  @override
+  Future<dynamic> executeScript(String betik) async {
+    final b = betik.trim().replaceFirst(RegExp(r';\s*$'), '');
+    final r = await _w.runJavaScriptReturningResult(
+        '(() => { const __r = ($b); return JSON.stringify(__r === undefined ? null : __r); })()');
+    final metin = r is String ? r : '$r';
+    try {
+      return jsonDecode(metin);
+    } catch (_) {
+      return metin;
+    }
+  }
+
+  @override
+  Future<void> loadUrl(String adres) => _w.loadRequest(Uri.parse(adres));
+  @override
+  Future<void> goBack() => _w.goBack();
+  @override
+  Future<void> goForward() => _w.goForward();
+  @override
+  Future<void> reload() => _w.reload();
+  @override
+  Future<void> stop() => _w.runJavaScript('window.stop()');
+  @override
+  Future<void> dispose() async {
+    await _w.loadRequest(Uri.parse('about:blank')).catchError((_) {});
+    await _url.close();
+    await _baslik.close();
+    await _gecmis.close();
+    await _yukleme.close();
+  }
+}
+
 /// Tarayıcının tek örneği: sekme kapanıp açılınca sayfa kaybolmaz; Kodi
 /// sekme görünmezken de ona erişir.
 class TarayiciDurumu extends ChangeNotifier {
   TarayiciDurumu._();
   static final TarayiciDurumu ornek = TarayiciDurumu._();
 
-  WebviewController? _c;
+  SayfaMotoru? _c;
   Future<void>? _baslatma;
   bool hazir = false;
   String? hata;
@@ -106,7 +282,7 @@ class TarayiciDurumu extends ChangeNotifier {
   /// API kurulum rehberi açık mı (tarayıcı sekmesinin yanında)?
   bool rehberAcik = false;
 
-  WebviewController? get denetci => hazir ? _c : null;
+  SayfaMotoru? get denetci => hazir ? _c : null;
 
   // --------------------------------------------------------------------------
   // Pencereli sayfa (VS Code'un tümleşik tarayıcısı gibi): WebView2 TürKod
@@ -128,8 +304,11 @@ class TarayiciDurumu extends ChangeNotifier {
   /// Açık menü / iletişim kutusu sayısı (bkz. TarayiciOrtuGozlemcisi).
   int _ortu = 0;
 
-  /// Kodi gibi sayfanın üstündeki Flutter öğeleri (mantıksal, genel).
+  /// Kodi gibi sayfanın üstündeki Flutter öğeleri (mantıksal, genel):
+  /// yuvarlak köşeli olanlar (balon) ve keskin köşeli parçalar (Kodi'nin
+  /// silüeti).
   List<Rect> _ustOgeler = const [];
+  List<Rect> _keskinOgeler = const [];
 
   /// Gizliyken yerine gösterilen anlık görüntü (PNG).
   Uint8List? onizleme;
@@ -166,30 +345,43 @@ class TarayiciDurumu extends ChangeNotifier {
   }
 
   /// Kodi (robot ve balon) gibi sayfanın üstünde durması gereken öğeler.
-  void ustOgeleriBildir(List<Rect> ogeler) {
+  /// [ogeler] yuvarlak köşeli (balon), [keskin] keskin köşeli kesilir (Kodi'nin
+  /// silüeti: kutusu değil yalnızca çizildiği yer; eskiden bütün kutu
+  /// kesiliyor, Kodi'nin çevresinde sayfanın bayat ve kaymış bir görüntüsü
+  /// görünüyordu).
+  void ustOgeleriBildir(List<Rect> ogeler, {List<Rect> keskin = const []}) {
     _ustOgeler = ogeler;
+    _keskinOgeler = keskin;
     _kesikleriUygula();
   }
+
+  /// Sayfa şu an ekranda mı (pencereli sayfa; üstüne Flutter çizemez)?
+  bool get sayfaGorunur => _gorunurNative;
 
   void _kesikleriUygula() {
     final c = _c;
     final a = _alan;
     if (c == null || !hazir || a == null) return;
-    final kesikler = <Rect>[
-      for (final o in _ustOgeler)
-        if (o.overlaps(a))
-          Rect.fromLTRB(
-              (o.left - a.left) * _dpr,
-              (o.top - a.top) * _dpr,
-              (o.right - a.left) * _dpr,
-              (o.bottom - a.top) * _dpr),
-    ];
-    final imza = kesikler.map((r) => '${r.left.round()},${r.top.round()},${r.right.round()},${r.bottom.round()}').join(';');
+    final kesikler = <Rect>[];
+    final yaricaplar = <double>[];
+    for (final (liste, yaricap) in [(_ustOgeler, 14.0 * _dpr), (_keskinOgeler, 0.0)]) {
+      for (final o in liste) {
+        if (!o.overlaps(a)) continue;
+        kesikler.add(Rect.fromLTRB((o.left - a.left) * _dpr, (o.top - a.top) * _dpr,
+            (o.right - a.left) * _dpr, (o.bottom - a.top) * _dpr));
+        yaricaplar.add(yaricap);
+      }
+    }
+    final imza = [
+      for (var i = 0; i < kesikler.length; i++)
+        '${kesikler[i].left.round()},${kesikler[i].top.round()},'
+            '${kesikler[i].right.round()},${kesikler[i].bottom.round()},${yaricaplar[i].round()}'
+    ].join(';');
     if (imza == _sonKesik) return;
     final ilkKesik =
         (_sonKesik.isEmpty || _sonKesik == _kGizliKesik) && kesikler.isNotEmpty;
     _sonKesik = imza;
-    c.setClipRects(kesikler).catchError((_) {});
+    c.setClipRects(kesikler, yaricaplar).catchError((_) {});
     // Kesik yerlerde (Kodi'nin çevresinde) sayfanın görüntüsü görünsün diye
     // anlık görüntü arada bir tazelenir; kesik yoksa gerek kalmaz.
     if (kesikler.isEmpty) {
@@ -321,24 +513,20 @@ class TarayiciDurumu extends ChangeNotifier {
 
   Future<void> _baslat() async {
     if (!gomuluTarayiciVar()) {
-      // WebView2 yalnızca Windows'ta: sayfalar bilgisayarın kendi tarayıcısında açılır.
-      hata = "IDE içindeki tarayıcı şimdilik yalnızca Windows'ta var. "
+      // Linux'ta IDE'ye gömülebilen bir tarayıcı bileşeni yok: sayfalar
+      // bilgisayarın kendi tarayıcısında açılır.
+      hata = "IDE içindeki tarayıcı Linux'ta yok. "
           'Sayfaları bilgisayarının kendi tarayıcısında açabilirsin.';
       notifyListeners();
       return;
     }
     final kusak = _kusak;
-    WebviewController? yeni;
+    SayfaMotoru? yeni;
     try {
-      final c = WebviewController();
+      final SayfaMotoru c =
+          suankiIsletim == Isletim.windows ? _WebView2Motoru() : _WkMotoru();
       yeni = c;
-      await c.initialize(windowed: true);
-      if (kusak != _kusak) {
-        // Hazırlanırken sekme kapatıldı.
-        await c.dispose();
-        return;
-      }
-      await c.setPopupWindowPolicy(WebviewPopupWindowPolicy.sameWindow);
+      await c.baslat();
       if (kusak != _kusak) {
         // Eskiden yalnızca initialize'dan sonra bakılıyordu: sekme bu arada
         // kapatılırsa eski denetçi yine kuruluyor, Edge süreçleri açık
@@ -389,8 +577,10 @@ class TarayiciDurumu extends ChangeNotifier {
         return;
       }
       _baslatma = null;
-      hata = 'Tarayıcı açılamadı. Bilgisayarda Microsoft Edge WebView2 kurulu olmalı '
-          '(Windows 10/11\'de genellikle vardır). Ayrıntı: $e';
+      hata = suankiIsletim == Isletim.windows
+          ? 'Tarayıcı açılamadı. Bilgisayarda Microsoft Edge WebView2 kurulu olmalı '
+              '(Windows 10/11\'de genellikle vardır). Ayrıntı: $e'
+          : 'Tarayıcı açılamadı. Ayrıntı: $e';
       notifyListeners();
     }
   }
@@ -676,6 +866,12 @@ class TarayiciDurumu extends ChangeNotifier {
 
 TarayiciDurumu get kTarayici => TarayiciDurumu.ornek;
 
+/// Sayfa motorunun kimliğinden (user agent) Edge işareti çıkarılır: Google,
+/// Edge'de her açılışta Chrome'u indirme paneli gösteriyordu. Motor zaten
+/// Chromium olduğu için sayfalar Chrome'daki gibi çalışır.
+String kromKimligi(String kimlik) =>
+    kimlik.replaceAll(RegExp(r' Edg[A-Za-z]*/[0-9.]+'), '').trim();
+
 /// API kurulum rehberini açar (tarayıcı sekmesinde, sağda rehber paneli).
 void kodiKurulumRehberi(BuildContext context) {
   kTarayici.rehberiAc();
@@ -817,7 +1013,10 @@ class _TarayiciSekmesiState extends State<TarayiciSekmesi> {
       // Burada yalnızca yeri bildirilir; menü ya da iletişim kutusu açıkken
       // sayfanın anlık görüntüsü gösterilir. Kodi'nin imleci sayfanın içinde.
       final onizleme = t.onizleme ?? t.altGoruntu;
-      sayfa = _SayfaYeri(
+      final gomulu = c.gorunum;
+      // macOS: sayfa Flutter görünümüne gömülü; Kodi ve menüler üstüne çizilir.
+      sayfa = gomulu ??
+          _SayfaYeri(
         dpr: MediaQuery.devicePixelRatioOf(context),
         child: onizleme == null
             ? ColoredBox(color: cs.surface)

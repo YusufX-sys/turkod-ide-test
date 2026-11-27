@@ -66,17 +66,36 @@ else:
         if getattr(sys, _ad) is None:
             setattr(sys, _ad, open(os.devnull, "w", encoding="utf-8"))
 
+from turkod_ide import platform_katmani as _pk
+
+# macOS'ta Finder'dan açılan uygulamanın PATH'i /usr/bin:/bin:/usr/sbin:/sbin olur:
+# Homebrew araçları (sox, brew, git, node) ve ~/.local/bin bulunamaz. Eksik
+# klasörler PATH'in SONUNA eklenir (Windows'ta bir şey yapmaz).
+_pk.path_tamamla()
+
+if getattr(sys, "frozen", False):
+    # Linux/macOS: PyInstaller'ın bu süreç için ayarladığı LD_LIBRARY_PATH /
+    # DYLD_* değişkenleri alt süreçlere (terminal, editör, kullanıcı programları)
+    # geçmesin; macOS'ta imzalı paketin içine __pycache__ yazılmasın
+    # (PYTHONDONTWRITEBYTECODE). Bu sürecin kendisi etkilenmez: yükleyici bu
+    # değişkenleri yalnızca açılışta okur. Windows'ta ortam değişmez.
+    _yeni_ortam = _pk.alt_surec_ortami()
+    for _ad in [k for k in os.environ if k not in _yeni_ortam]:
+        del os.environ[_ad]
+    os.environ.update(_yeni_ortam)
+
 # IDE terminali bu sürecin ortamını miras alır: paketli Python'u PATH'in başına koy,
 # böylece kullanıcı terminalde `python ...` / `pip install X` yazabilir (pip.cmd
 # build_release.ps1 tarafından oluşturulur).
 if getattr(sys, "frozen", False):
-    from turkod_ide import platform_katmani as _pk
     _py = _pk.gomulu_python_yol_dizini()   # Windows: python_embed, Linux/macOS: python_embed/bin
     if os.path.isdir(_py):
         os.environ["PATH"] = _py + os.pathsep + os.environ.get("PATH", "")
 
 TERCIH_EDILEN_PORT = 8765
-PORT_DOSYASI = os.path.join(tempfile.gettempdir(), "turkod_backend_port")
+# Windows: %TEMP%; Linux/macOS: kullanıcının veri klasörü (paylaşılan /tmp değil).
+from turkod_ide.paths import port_dosyasi_yolu  # noqa: E402
+PORT_DOSYASI = port_dosyasi_yolu()
 
 
 def _port_bos_mu(port: int) -> bool:

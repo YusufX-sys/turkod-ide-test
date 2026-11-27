@@ -44,7 +44,7 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
   void _sayfaIstegi() {
     final istek = PdfSekmesi.sayfaIstegi.value;
     if (istek == null || !_hazir || !mounted) return;
-    if (!p.equals(istek.yol, widget.yol)) return;
+    if (!yollarAyniMi(istek.yol, widget.yol)) return;
     PdfSekmesi.sayfaIstegi.value = null;
     _sayfayaGit(istek.sayfa);
   }
@@ -108,9 +108,9 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
     setState(_sayfaKutusunuGuncelle);
   }
 
-  /// Ctrl + fare tekerleği: yakınlaştırır / uzaklaştırır.
+  /// Ctrl + fare tekerleği (macOS'ta Cmd): yakınlaştırır / uzaklaştırır.
   void _tekerlek(PointerSignalEvent e) {
-    if (e is! PointerScrollEvent || !HardwareKeyboard.instance.isControlPressed) {
+    if (e is! PointerScrollEvent || !kisayolTusuBasili()) {
       return;
     }
     GestureBinding.instance.pointerSignalResolver.register(e, (ev) {
@@ -220,7 +220,7 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
         // Yakınlaştırma
         PanelDugmesi(
           ikon: Icons.zoom_out_rounded,
-          ipucu: 'Uzaklaştır (Ctrl + -)',
+          ipucu: 'Uzaklaştır (${kisayolTusuAdi()} + -)',
           onPressed: _hazir ? _uzaklas : null,
         ),
         Container(
@@ -234,13 +234,13 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
         ),
         PanelDugmesi(
           ikon: Icons.zoom_in_rounded,
-          ipucu: 'Yakınlaştır (Ctrl + +)',
+          ipucu: 'Yakınlaştır (${kisayolTusuAdi()} + +)',
           onPressed: _hazir ? _yakinlas : null,
         ),
         const SizedBox(width: 4),
         PanelDugmesi(
           ikon: Icons.fit_screen_outlined,
-          ipucu: 'Genişliğe sığdır (Ctrl + 0)',
+          ipucu: 'Genişliğe sığdır (${kisayolTusuAdi()} + 0)',
           onPressed: _hazir ? _genisligeSigdir : null,
         ),
         PanelDugmesi(
@@ -253,12 +253,16 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
 
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.equal, control: true): _yakinlas,
-        const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true): _yakinlas,
-        const SingleActivator(LogicalKeyboardKey.minus, control: true): _uzaklas,
-        const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
+        // macOS'ta Ctrl yerine Cmd.
+        platformKisayolu(const SingleActivator(LogicalKeyboardKey.equal, control: true)):
+            _yakinlas,
+        platformKisayolu(const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true)):
+            _yakinlas,
+        platformKisayolu(const SingleActivator(LogicalKeyboardKey.minus, control: true)):
             _uzaklas,
-        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+        platformKisayolu(
+            const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true)): _uzaklas,
+        platformKisayolu(const SingleActivator(LogicalKeyboardKey.digit0, control: true)):
             _genisligeSigdir,
         const SingleActivator(LogicalKeyboardKey.pageDown): () =>
             _sayfayaGit((_sayfa ?? 1) + 1),

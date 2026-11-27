@@ -52,10 +52,11 @@ class KarsilamaEkrani extends StatelessWidget {
     final cs = theme.colorScheme;
     final ed = context.watch<EditorProvider>();
     final son = ed.recentFiles.take(6).toList();
-    // macOS'ta Ctrl yerine Cmd yazılır; EXE ipucu yalnızca Windows'ta gösterilir.
+    // macOS'ta Ctrl yerine Cmd yazılır; Linux/macOS'ta "EXE'ye Dönüştür" yerine
+    // "Uygulamaya Dönüştür".
     final ipuclari = [
       for (final i in kKarsilamaIpuclari)
-        if (exeDonusturmeVar() || !i.contains('EXE')) kisayolluMetin(i),
+        kisayolluMetin(i.replaceAll("EXE'ye Dönüştür", exeDonusturEtiketi().replaceAll('…', ''))),
     ];
     final ipucu = ipuclari[DateTime.now().day % ipuclari.length];
 

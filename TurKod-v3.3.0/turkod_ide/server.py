@@ -57,10 +57,12 @@ try:
     from .ide_core import IDECore
     from . import entegrasyon
     from . import platform_katmani
+    from .paths import port_dosyasi_yolu
 except ImportError:
     from ide_core import IDECore
     import entegrasyon
     import platform_katmani
+    from paths import port_dosyasi_yolu
 
 
 app = FastAPI(title="TürKod Backend")
@@ -240,6 +242,31 @@ def _cmd_sozluk_verileri(params):
     return core.sozluk_verileri()
 
 
+def _kutuphane_rehberi():
+    # Rehber metinleri büyük; yalnızca rehber ilk açıldığında yüklenir.
+    try:
+        from . import kutuphane_rehberi
+    except ImportError:
+        import kutuphane_rehberi
+    return kutuphane_rehberi
+
+
+def _cmd_kutuphane_listesi(params):
+    return _kutuphane_rehberi().kutuphane_listesi()
+
+
+def _cmd_kutuphane_ayrintisi(params):
+    return _kutuphane_rehberi().kutuphane_ayrintisi(params.get("py"))
+
+
+def _cmd_kabuk_penceresi():
+    """Kabuk penceresi açılamazsa nedeni (terminal programı yok, macOS'ta
+    Otomasyon izni verilmedi ...) arayüze Türkçe iletilir."""
+    if calistirici.kabuk_penceresi_ac():
+        return {"ok": True}
+    return {"ok": False, "hata": platform_katmani.son_terminal_hatasi()}
+
+
 def _cmd_sistem_fontlari(params):
     return core.sistem_fontlari()
 
@@ -281,7 +308,8 @@ def _cmd_kodi_kopru_gonder(params):
 
 def _cmd_kodi_sor(params):
     return core.kodi_sor(params.get("mesaj", ""), params.get("dusunme"),
-                         params.get("baglam"), otomatik=params.get("otomatik") is True)
+                         params.get("baglam"), otomatik=params.get("otomatik") is True,
+                         pencere_goruntusu=params.get("pencere_goruntusu"))
 
 
 def _cmd_ai_kodu_acikla(params):
@@ -420,6 +448,8 @@ SYNC_COMMANDS = {
     "kodu_bicimlendir": _cmd_kodu_bicimlendir,
     "dosyalarda_ara": _cmd_dosyalarda_ara,
     "sozluk_verileri": _cmd_sozluk_verileri,
+    "kutuphane_listesi": _cmd_kutuphane_listesi,
+    "kutuphane_ayrintisi": _cmd_kutuphane_ayrintisi,
     "sistem_fontlari": _cmd_sistem_fontlari,
     "ai_modelleri": _cmd_ai_modelleri,
     "ai_modelleri_guncelle": _cmd_ai_modelleri_guncelle,
@@ -504,7 +534,7 @@ SYNC_COMMANDS.update({
         bool(params.get("zorla", False))),
     "ai_tamamla": lambda params: core.ai_tamamla(params.get("once", ""),
                                                  params.get("sonra", "")),
-    "kabuk_penceresi": lambda params: {"ok": calistirici.kabuk_penceresi_ac()},
+    "kabuk_penceresi": lambda params: _cmd_kabuk_penceresi(),
 })
 
 SYNC_COMMANDS["surum"] = lambda params: {"ok": True, "surum": updater.mevcut_surum()}
@@ -939,7 +969,8 @@ def main():
                      name="turkod-gecici-supurme").start()
 
     PREFERRED_PORT = 8765
-    PORT_FILE = os.path.join(tempfile.gettempdir(), "turkod_backend_port")
+    # Windows: %TEMP%; Linux/macOS: kullanıcının veri klasörü (paths.port_dosyasi_yolu).
+    PORT_FILE = port_dosyasi_yolu()
 
     def _find_free_port():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

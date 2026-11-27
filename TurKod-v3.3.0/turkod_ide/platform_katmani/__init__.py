@@ -35,11 +35,18 @@ Ortak arayüz:
     dosya_iliskisi_kur() / dosya_iliskisi_kaldir()
     kullanici_python_bul()     kullanıcı programlarını çalıştıran Python (gömülü / PATH)
     gomulu_python_yol_dizini() IDE terminali için PATH'e konan klasör
+    alt_surec_ortami(env)      dış program için ortam (paketin LD_LIBRARY_PATH'i geri alınır)
+    path_tamamla()             açılışta PATH'e eksik klasörleri ekler (macOS: Homebrew)
+    yazi_tipi_aileleri()       sistemdeki yazı tipi aileleri (Windows: None)
+    son_terminal_hatasi()      terminalde_ac False dönünce nedeni (Türkçe) ya da None
 """
+import os
 import sys
 
 from . import linux, macos, windows
 from ._ortak import PlatformHatasi  # noqa: F401  (dışarıya açık)
+from ._ortak import alt_surec_ortami  # noqa: F401  (dışarıya açık)
+from ._ortak import eksik_path_klasorleri, path_ekleri_uygula
 
 
 def _ad(platform_adi=None):
@@ -106,7 +113,33 @@ def ebeveyni_izle(pid, bitince):
 
 
 def terminalde_ac(komut, cwd=None):
+    """True: terminal açıldı. False: açılamadı; nedeni son_terminal_hatasi()'nda."""
     return secili().terminalde_ac(komut, cwd)
+
+
+def son_terminal_hatasi():
+    """Son terminalde_ac False döndüyse kullanıcıya gösterilecek Türkçe neden
+    (ör. "Terminal programı bulunamadı ..." ya da macOS'ta Otomasyon izni) ya da None.
+    terminalde_ac hata fırlatmaz: çağıranlardan biri (`turkod --kabuk-pencere`)
+    hatayı yakalamıyor."""
+    return getattr(secili(), "son_terminal_hatasi", lambda: None)()
+
+
+def path_tamamla():
+    """Sunucunun açılışında çağrılır: bu sürecin PATH'inde olmayan beklenen
+    klasörleri (macOS: /opt/homebrew/bin, /opt/homebrew/sbin, /usr/local/bin;
+    Linux/macOS: ~/.local/bin) PATH'in SONUNA ekler. Windows'ta bir şey yapmaz.
+    Yeni PATH'i döndürür."""
+    yeni = path_ekleri_uygula(os.environ.get("PATH", ""), eksik_path_klasorleri())
+    if yeni != os.environ.get("PATH", ""):
+        os.environ["PATH"] = yeni
+    return yeni
+
+
+def yazi_tipi_aileleri():
+    """Sistemdeki yazı tipi ailelerinin sıralı listesi ya da None (bilinmiyor;
+    Windows'ta çağıran kendi yolunu kullanır). macOS'ta Tk bu süreçte AÇILMAZ."""
+    return secili().yazi_tipi_aileleri()
 
 
 def editoru_ayri_baslat(exe, dosyalar=()):

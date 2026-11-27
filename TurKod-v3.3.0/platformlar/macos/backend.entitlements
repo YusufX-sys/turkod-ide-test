@@ -10,12 +10,19 @@
   - disable-library-validation: kullanıcının sonradan `pip yükle` ile kurduğu
     paketlerin .so dosyaları TürKod'un kimliğiyle imzalı değildir; bu izin olmadan
     Python onları yükleyemez.
+  - device.audio-input: Kodi ile sesli konuşmada mikrofonu SoX (rec/sox) dinler;
+    sertleştirilmiş çalışma ortamında (hardened runtime) bu izin olmadan ses gelmez.
+  - automation.apple-events: Kabuk penceresi Terminal'i osascript ile açar.
 -->
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
 	<true/>
 	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 </dict>
 </plist>

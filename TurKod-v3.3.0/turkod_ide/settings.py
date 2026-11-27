@@ -16,6 +16,16 @@ except ImportError:
 _DPAPI_ONEKI = "dpapi:"
 
 
+def varsayilan_yazi_tipi():
+    """Sistemde hazır gelen eş aralıklı yazı tipi (çağrıldığı anda bakılır):
+    Windows Consolas, macOS Menlo, Linux DejaVu Sans Mono."""
+    if platform_katmani.windows_mu():
+        return "Consolas"
+    if platform_katmani.macos_mu():
+        return "Menlo"
+    return "DejaVu Sans Mono"
+
+
 def _dpapi(veri, coz):
     """Windows DPAPI: veri yalnızca aynı Windows kullanıcısı tarafından
     çözülebilir. Windows dışında ya da hata olursa None (platform katmanı)."""
@@ -73,7 +83,7 @@ class AyarlarYoneticisi:
             "otomatik_kaydetme": False,
             "otomatik_kaydetme_aralik": 30,
             "yazi_boyutu": 14,
-            "yazi_tipi": "Consolas",
+            "yazi_tipi": varsayilan_yazi_tipi(),
             "satir_numaralari": True,
             "bosluk_gostergesi": True,
             "kelime_sar": False,

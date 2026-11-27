@@ -14,7 +14,8 @@ import sys
 import threading
 import time
 
-CREATE_NO_WINDOW = 0x08000000
+# Linux/macOS'ta Popen creationflags kabul etmez (0 dışındaki değer hata verir).
+CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 RENK = {
     "zemin": "#070b16", "panel": "#0d1324", "kenar": "#1d2742", "yazi": "#e6edf6",
@@ -49,6 +50,8 @@ except Exception:  # noqa: BLE001 - çeviri yoksa çıktı olduğu gibi gösteri
 
 
 def _dpi_farkinda_ol():
+    if os.name != "nt":
+        return
     try:
         import ctypes
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -60,6 +63,8 @@ def _koyu_baslik(pencere):
     """Başlık çubuğunu koyu yapar (calistirici._koyu_baslik_cubugu ile aynı).
     Pencere görünmezken (alpha 0) çağrılmalı; SWP_FRAMECHANGED çerçeveyi
     yeniden çizdirir, sonra pencere görünür yapılır."""
+    if os.name != "nt":
+        return
     try:
         import ctypes
         from ctypes import wintypes
@@ -87,11 +92,52 @@ def _koyu_baslik(pencere):
 
 
 def _agaci_sonlandir(pid):
+    """Programı alt süreçleriyle birlikte kapatır."""
     try:
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                       creationflags=CREATE_NO_WINDOW, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           creationflags=CREATE_NO_WINDOW, timeout=5,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        import signal
+        grup = os.getpgid(pid)
+        if grup != os.getpgid(0):
+            os.killpg(grup, signal.SIGKILL)   # kendi süreç grubundaki program
+        else:
+            os.kill(pid, signal.SIGKILL)
     except Exception:  # noqa: BLE001
+        pass
+
+
+def _olcek(pencere):
+    """Pencere ölçeği. Windows'ta DPI / 96. macOS'ta Tk ekranı 72 DPI bildirir
+    (0.75: pencere ve yazılar küçük kalıyordu); sistem noktaları kendisi
+    ölçeklediği için 1. Linux'ta 96 DPI'ın altına inilmez."""
+    if sys.platform == "darwin":
+        return 1.0
+    try:
+        olcek = pencere.winfo_fpixels("1i") / 96.0
+    except Exception:  # noqa: BLE001
+        return 1.0
+    return olcek if os.name == "nt" else max(1.0, olcek)
+
+
+def _simge_kur(tk, kok):
+    """Windows'ta EXE'nin kendi simgesi (.ico). Linux/macOS Tk .ico okuyamaz:
+    pakette .png varsa iconphoto ile verilir (macOS'ta Dock simgesi .app'ten gelir)."""
+    try:
+        if os.name == "nt":
+            kok.iconbitmap(default=sys.executable)
+            return
+        for kok_dizin in (getattr(sys, "_MEIPASS", None),
+                          os.path.dirname(os.path.abspath(sys.executable))):
+            png = os.path.join(kok_dizin, "program-logo.png") if kok_dizin else None
+            if png and os.path.isfile(png):
+                resim = tk.PhotoImage(master=kok, file=png)
+                kok.iconphoto(True, resim)
+                kok._turkod_simge = resim   # çöp toplanmasın
+                return
+    except tk.TclError:
         pass
 
 
@@ -103,11 +149,8 @@ def _pencere_hazirla(tk, baslik, en, boy):
         pass
     kok.title(baslik)
     kok.configure(bg=RENK["zemin"])
-    try:
-        kok.iconbitmap(default=sys.executable)
-    except tk.TclError:
-        pass
-    olcek = kok.winfo_fpixels("1i") / 96.0
+    _simge_kur(tk, kok)
+    olcek = _olcek(kok)
     o = lambda px: max(1, int(round(px * olcek)))  # noqa: E731
     x = max(0, (kok.winfo_screenwidth() - o(en)) // 2)
     y = max(0, (kok.winfo_screenheight() - o(boy)) // 3)
@@ -172,7 +215,7 @@ def kaynak_penceresi_ac(tk, ana, ad, kaynak, kok_mu=False):
         pencere.attributes("-alpha", 0.0)
         pencere.title(f"{ad} — TürKod kaynak kodu")
         pencere.configure(bg=RENK["zemin"])
-        olcek = pencere.winfo_fpixels("1i") / 96.0
+        olcek = _olcek(pencere)
         o = lambda px: max(1, int(round(px * olcek)))  # noqa: E731
         pencere.geometry(f"{o(820)}x{o(600)}")
     f_kod, f_ui = _yazi_tipleri(pencere)
@@ -399,7 +442,9 @@ class ExeTerminali:
                 [sys.executable, *sys.argv[1:]], env=env,
                 cwd=os.path.dirname(os.path.abspath(sys.executable)),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                bufsize=0, creationflags=CREATE_NO_WINDOW)
+                bufsize=0, creationflags=CREATE_NO_WINDOW,
+                # Linux/macOS: Durdur, programı alt süreçleriyle kapatabilsin.
+                start_new_session=os.name != "nt")
         except OSError as e:
             self._yaz(f"[HATA] Program başlatılamadı: {e}\n", "hata")
             self._durum("Hata", "hata")
@@ -489,10 +534,22 @@ def konsolda_calistir(ayar):
     ctrl_c = threading.Event()            # izleyici iş parçacığı için
     ctrl_c_okuyucu = threading.Event()    # girdi aktaran iş parçacığı için
     try:
+        if os.name != "nt":
+            raise OSError("Windows konsolu değil")
         _isleyici = _ctrl_c_yakala(ctrl_c, ctrl_c_okuyucu)  # noqa: F841 - çöp toplanmasın
     except Exception:  # noqa: BLE001
+        # Linux/macOS: Ctrl+C aynı süreç grubundaki programa da gider; bu süreç
+        # kapanmaz, yalnızca olayları kurar (Windows'taki işleyiciyle aynı iş).
         import signal
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        def _sinyal(*_a):
+            ctrl_c.set()
+            ctrl_c_okuyucu.set()
+
+        try:
+            signal.signal(signal.SIGINT, _sinyal)
+        except Exception:  # noqa: BLE001
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         import ctypes
         ctypes.windll.kernel32.SetConsoleOutputCP(65001)

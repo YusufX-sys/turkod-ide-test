@@ -306,12 +306,21 @@ class YerelModelTestleri(unittest.TestCase):
         amd = [{"ad": "Radeon (TM) R5 M430", "vram_gb": 2.0, "uretici": "amd"},
                {"ad": "Intel(R) HD Graphics 620", "vram_gb": 1.0, "uretici": "intel"}]
         k = karar(amd, None)
-        self.assertEqual(k["tur"], "cpu")
-        self.assertIn("AMD", k["aciklama"])
+        self.assertEqual(k["tur"], "cpu")                          # 2 GB: yetersiz
         self.assertEqual(k["vram_gb"], 0.0)
-        # Güçlü AMD kart da (8 GB) hazır paketlerde hızlandırılmaz.
-        self.assertEqual(karar([{"ad": "Radeon RX 7600", "vram_gb": 8, "uretici": "amd"}],
-                               None)["tur"], "cpu")
+        # Güçlü AMD kart (8 GB): Windows/Linux x86_64'te Vulkan'lı motor.
+        guclu = [{"ad": "Radeon RX 7600", "vram_gb": 8, "uretici": "amd"}]
+        with mock.patch.object(yerel_modeller, "vulkan_paketi_var", return_value=True):
+            k = karar(guclu, None)
+            self.assertEqual((k["tur"], k["paket"], k["vram_gb"]), ("vulkan", "vulkan", 8))
+        with mock.patch.object(yerel_modeller, "vulkan_paketi_var", return_value=False):
+            k = karar(guclu, None)
+            self.assertEqual(k["tur"], "cpu")
+            self.assertIn("AMD", k["aciklama"])
+        self.assertTrue(yerel_modeller.vulkan_paketi_var("linux", "x86_64"))
+        self.assertTrue(yerel_modeller.vulkan_paketi_var("win32", "AMD64"))
+        self.assertFalse(yerel_modeller.vulkan_paketi_var("linux", "aarch64"))
+        self.assertFalse(yerel_modeller.vulkan_paketi_var("darwin", "arm64"))
         nv = [{"ad": "NVIDIA GeForce RTX 3060", "vram_gb": 12.0, "uretici": "nvidia"}]
         k = karar(nv, (12, 4))
         self.assertEqual((k["tur"], k["paket"], k["vram_gb"]), ("cuda", "cu124", 12.0))
@@ -321,6 +330,45 @@ class YerelModelTestleri(unittest.TestCase):
         self.assertEqual(karar(az, (12, 6))["tur"], "cpu")        # az VRAM
         self.assertEqual(yerel_modeller.uretici("AMD Radeon RX 580"), "amd")
         self.assertEqual(yerel_modeller.uretici("NVIDIA GeForce GTX 1650"), "nvidia")
+
+    def test_linux_ekran_karti(self):
+        """Linux'ta ekran kartları /sys/class/drm'den okunur (eskiden hiç bulunmuyordu)."""
+        kok = tempfile.mkdtemp()
+        try:
+            for kart, uretici, vram in (("card0", "0x8086", None), ("card1", "0x1002", 8 * 2**30)):
+                aygit = os.path.join(kok, kart, "device")
+                os.makedirs(aygit)
+                with open(os.path.join(aygit, "vendor"), "w") as f:
+                    f.write(uretici + "\n")
+                if vram:
+                    with open(os.path.join(aygit, "mem_info_vram_total"), "w") as f:
+                        f.write(str(vram))
+            os.makedirs(os.path.join(kok, "card1-DP-1"))       # bağlantı noktası: atlanır
+            with mock.patch.object(yerel_modeller.sys, "platform", "linux"):
+                kartlar = yerel_modeller._gpu_linux(kok)
+        finally:
+            import shutil
+            shutil.rmtree(kok, ignore_errors=True)
+        self.assertEqual([(k["uretici"], k["vram_gb"]) for k in kartlar],
+                         [("intel", 0.0), ("amd", 8.0)])
+
+    def test_mac_motor_paketi(self):
+        """Apple Silicon: Metal'li paket; Intel Mac: hazır paketi olan son sürüm
+        (0.3.36'nın Intel Mac paketi yok, eskiden kurulum hep başarısızdı)."""
+        paket = yerel_modeller.cpu_paketi
+        self.assertEqual(paket("darwin", "arm64"), "metal")
+        self.assertEqual(paket("darwin", "x86_64"), "cpu-intel-mac")
+        self.assertEqual(paket("linux", "x86_64"), "cpu")
+        self.assertEqual(paket("win32", "AMD64"), "cpu")
+        komut = yerel_modeller._pip_komutu("py", "hedef", "cpu-intel-mac")
+        self.assertIn("llama-cpp-python==0.3.2", komut)
+        self.assertIn(yerel_modeller.WHL_INDEKS.format(paket="cpu"), komut)
+        komut = yerel_modeller._pip_komutu("py", "hedef", "metal")
+        self.assertIn(yerel_modeller.WHL_INDEKS.format(paket="metal"), komut)
+        h = yerel_modeller.apple_hizlandirma(16)
+        self.assertTrue(h["metal"])
+        self.assertEqual(h["tur"], "cpu")
+        self.assertEqual(h["metal_bellek_gb"], 10.4)
 
     def test_sigar_mi_bellek_ve_disk(self):
         dep = self.depolama(50)

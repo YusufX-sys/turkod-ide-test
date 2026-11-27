@@ -67,9 +67,8 @@ class SablonTestleri(unittest.TestCase):
                          r.stderr.decode("utf-8", "replace"))
 
 
-    # runner._tk_simge_kullanilsin: TürKod program simgesi (.ico) yalnızca
-    # Windows'ta verilir; Linux/macOS'ta pencere kütüphanenin kendi simgesiyle açılır.
-    @unittest.skipUnless(sys.platform == "win32", "Program simgesi yalnızca Windows'ta verilir")
+    # TürKod program simgesi her sistemde verilir: Windows'ta .ico, Linux/macOS'ta
+    # .png (runner._tk_simge_dosyasi; eskiden yalnızca Windows'ta veriliyordu).
     def test_simge_pencere_olusmadan_once_verilir(self):
         """Ursina'ya, Panda3D'ye ve pygame'e simge pencere açılmadan önce
         verilir (sonradan konan simge görev çubuğunda geç kalıyordu)."""
@@ -84,15 +83,16 @@ class SablonTestleri(unittest.TestCase):
             "_tk_ursina_yamala(_t.SimpleNamespace(Ursina=Ursina))\n"
             "_prc = []\n"
             "_tk_panda3d_yamala(_t.SimpleNamespace(loadPrcFileData=lambda a, b: _prc.append(b)))\n"
-            "print(Ursina().icon == _TK_PROGRAM_IKONU, Ursina(icon='kendi.ico').icon == 'kendi.ico',\n"
-            "      _prc == ['icon-filename ' + _TK_PROGRAM_IKONU])\n")
+            "_s = _tk_simge_dosyasi()\n"
+            "print(Ursina().icon == _s, Ursina(icon='kendi.ico').icon == 'kendi.ico',\n"
+            "      _prc == ['icon-filename ' + _s], _s.endswith('.ico' if os.name == 'nt' else '.png'))\n")
         klasor = tempfile.mkdtemp(prefix="turkod_sablon_")
         self.addCleanup(shutil.rmtree, klasor, True)
         dosya = os.path.join(klasor, "sablon.py")
         with open(dosya, "w", encoding="utf-8") as f:
             f.write(betik)
         r = subprocess.run([sys.executable, "-X", "utf8", dosya], capture_output=True, timeout=60)
-        self.assertEqual(r.stdout.decode("utf-8").strip().splitlines()[-1], "Doğru Doğru Doğru",
+        self.assertEqual(r.stdout.decode("utf-8").strip().splitlines()[-1], "Doğru Doğru Doğru Doğru",
                          r.stderr.decode("utf-8", "replace"))
 
 

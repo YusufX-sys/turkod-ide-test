@@ -16,6 +16,7 @@
 """
 import json
 import os
+import platform
 import re
 import shutil
 import socket
@@ -32,12 +33,20 @@ except ImportError:
 
 HF_API = "https://huggingface.co/api/models"
 HF_INDIR = "https://huggingface.co/{depo}/resolve/main/{dosya}"
+GPU_TURLERI = ("cuda", "vulkan")   # ekran kartı motorları (motor/<tür> klasörü)
 WHL_INDEKS = "https://abetlen.github.io/llama-cpp-python/whl/{paket}"
 ONERI_OMRU = 24 * 3600
 
 # (paket klasörü, sürüm). cu121–cu124 yalnızca 0.3.4 sürümüyle yayımlanmış.
 MOTOR_PAKETLERI = {
     "cpu": ("cpu", "0.3.36"),
+    # Apple Silicon: Metal'li paket (ekran kartında hızlanır, işlemcide de çalışır).
+    "metal": ("metal", "0.3.36"),
+    # Intel Mac: hazır paketi olan son sürüm 0.3.2 (yeni sürümler yalnızca kaynak
+    # koduyla yayımlanıyor; derleyici olmadan kurulamaz). Varsayılan modelleri açar.
+    "cpu-intel-mac": ("cpu", "0.3.2"),
+    # AMD (ve diğer) ekran kartları: Windows ve Linux x86_64 için Vulkan'lı paket.
+    "vulkan": ("vulkan", "0.3.36"),
     "cu130": ("cu130", "0.3.36"),
     "cu125": ("cu125", "0.3.36"),
     "cu124": ("cu124", "0.3.4"),
@@ -55,7 +64,8 @@ CUDA_KITAPLIKLARI = {
     "cu130": ["nvidia-cuda-runtime==13.0.*", "nvidia-cublas==13.0.*"],
 }
 # Paket indirme boyutu (yaklaşık, MB; CUDA kitaplıkları dahil) — arayüzde gösterilir.
-MOTOR_BOYUTU_MB = {"cpu": 8, "cu130": 230 + 450, "cu125": 510 + 450, "cu124": 400 + 450,
+MOTOR_BOYUTU_MB = {"cpu": 8, "metal": 8, "cpu-intel-mac": 5, "vulkan": 40,
+                   "cu130": 230 + 450, "cu125": 510 + 450, "cu124": 400 + 450,
                    "cu121": 400 + 450}
 
 GOREVLER = {
@@ -95,6 +105,21 @@ YEDEK_ONERILER = {
 
 def _bayrak():
     return platform_katmani.gizli_surec_ayarlari()
+
+
+def _ortam(**ek):
+    """Alt süreç ortamı: sisteme göre düzeltilmiş (Linux paketinde
+    LD_LIBRARY_PATH, macOS'ta Homebrew PATH'i) + verilen eklemeler."""
+    env = dict(platform_katmani.alt_surec_ortami(dict(os.environ)))
+    env.update(ek)
+    return env
+
+
+def _isletim():
+    """sys.platform biçiminde işletim sistemi adı (platform katmanından)."""
+    if platform_katmani.windows_mu():
+        return "win32"
+    return "darwin" if platform_katmani.macos_mu() else "linux"
 
 
 def _veri_dizini():
@@ -250,6 +275,44 @@ def _gpu_kayit_defteri():
     return kartlar
 
 
+_PCI_URETICI = {"0x1002": "amd", "0x10de": "nvidia", "0x8086": "intel"}
+
+
+def _gpu_linux(drm="/sys/class/drm"):
+    """Linux: /sys/class/drm/cardN/device altından ekran kartları. VRAM yalnızca
+    amdgpu sürücüsü yazar (mem_info_vram_total); diğerlerinde 0."""
+    kartlar = []
+    if not platform_katmani.linux_mu():
+        return kartlar
+    try:
+        adlar = sorted(os.listdir(drm))
+    except OSError:
+        return kartlar
+    gorulen = set()
+    for ad in adlar:
+        if not re.fullmatch(r"card\d+", ad):
+            continue
+        aygit = os.path.join(drm, ad, "device")
+        try:
+            gercek = os.path.realpath(aygit)
+            if gercek in gorulen:
+                continue
+            gorulen.add(gercek)
+            with open(os.path.join(aygit, "vendor"), encoding="ascii") as f:
+                ure = _PCI_URETICI.get(f.read().strip().lower(), "diger")
+        except OSError:
+            continue
+        vram = 0
+        try:
+            with open(os.path.join(aygit, "mem_info_vram_total"), encoding="ascii") as f:
+                vram = int(f.read().strip() or 0)
+        except (OSError, ValueError):
+            pass
+        etiket = {"amd": "AMD Radeon", "nvidia": "NVIDIA", "intel": "Intel"}.get(ure, "Ekran kartı")
+        kartlar.append({"ad": etiket, "vram_gb": round(vram / 2**30, 1), "uretici": ure})
+    return kartlar
+
+
 def _nvidia_bilgisi():
     """(kartlar, CUDA sürümü) — nvidia-smi yoksa ([], None)."""
     yol = shutil.which("nvidia-smi")
@@ -262,9 +325,9 @@ def _nvidia_bilgisi():
     try:
         sorgu = subprocess.run(
             [yol, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5, **_bayrak()).stdout
+            capture_output=True, text=True, timeout=5, env=_ortam(), **_bayrak()).stdout
         ozet = subprocess.run([yol], capture_output=True, text=True, timeout=5,
-                              **_bayrak()).stdout
+                              env=_ortam(), **_bayrak()).stdout
     except Exception:  # noqa: BLE001
         return [], None
     kartlar = []
@@ -317,16 +380,40 @@ def hizlandirma_karari(kartlar, cuda):
                 "aciklama": neden + " Modeller işlemcide çalışır."}
     amd = [k for k in kartlar if k.get("uretici") == "amd"]
     if amd:
+        en_iyi = max(amd, key=lambda k: k.get("vram_gb", 0))
+        # Vulkan'lı hazır paket yalnızca Windows ve Linux (x86_64) için var.
+        if vulkan_paketi_var() and en_iyi.get("vram_gb", 0) >= 3:
+            return {"tur": "vulkan", "paket": "vulkan", "vram_gb": en_iyi["vram_gb"],
+                    "kart": en_iyi["ad"],
+                    "aciklama": f"{en_iyi['ad']} ile ekran kartında (Vulkan) hızlandırılır."}
+        neden = (f"{en_iyi['ad']} ekran belleği ({en_iyi['vram_gb']} GB) hızlandırma için "
+                 "yetersiz." if vulkan_paketi_var() else
+                 f"{en_iyi['ad']}: bu sistemde AMD ekran kartı için hazır motor paketi yok.")
         return {"tur": "cpu", "paket": "cpu", "vram_gb": 0.0, "kart": None,
-                "aciklama": f"{amd[0]['ad']}: AMD ekran kartları bu motorun hazır "
-                            "paketlerinde hızlandırma için kullanılmıyor (yalnızca "
-                            "NVIDIA CUDA). Modeller işlemcide çalışır."}
+                "aciklama": neden + " Modeller işlemcide çalışır."}
     if kartlar:
         return {"tur": "cpu", "paket": "cpu", "vram_gb": 0.0, "kart": None,
                 "aciklama": "Tümleşik ekran kartı hızlandırma sağlamaz; modeller "
                             "işlemcide çalışır."}
     return {"tur": "cpu", "paket": "cpu", "vram_gb": 0.0, "kart": None,
             "aciklama": "Uygun ekran kartı bulunamadı; modeller işlemcide çalışır."}
+
+
+def vulkan_paketi_var(isletim=None, makine=None):
+    """Vulkan'lı hazır motor paketi: Windows ve Linux, yalnızca x86_64."""
+    isletim = isletim or _isletim()
+    makine = (makine or platform.machine()).lower()
+    return (isletim == "win32" or isletim.startswith("linux")) and makine in ("x86_64", "amd64")
+
+
+def apple_hizlandirma(ram_gb):
+    """Apple Silicon: işlemci ve ekran kartı aynı belleği paylaşır; macOS ekran
+    kartına belleğin yaklaşık üçte ikisini verir. Motor ayrı kurulmaz (işlemci
+    motoru Metal'lidir); 'tur' bu yüzden 'cpu' kalır, 'metal' bayrağı hızlandırmayı söyler."""
+    return {"tur": "cpu", "paket": "metal", "vram_gb": 0.0,
+            "kart": "Apple ekran kartı (Metal)", "metal": True,
+            "metal_bellek_gb": round(max(0.0, ram_gb * 0.65), 1),
+            "aciklama": "Apple Silicon: modeller Mac'in ekran kartında (Metal) hızlandırılır."}
 
 
 _DONANIM = None
@@ -339,11 +426,13 @@ def donanim_bilgisi(tazele=False):
         return dict(_DONANIM)
     toplam, bos = _ram_gb()
     nvidia, cuda = _nvidia_bilgisi()
-    kartlar = _gpu_kayit_defteri()
+    kartlar = _gpu_kayit_defteri() or _gpu_linux()
     # nvidia-smi'nin VRAM değeri daha doğrudur; aynı kart iki kez sayılmasın.
     if nvidia:
         kartlar = [k for k in kartlar if k["uretici"] != "nvidia"] + nvidia
     hiz = hizlandirma_karari(kartlar, cuda)
+    if cpu_paketi() == "metal":
+        hiz = apple_hizlandirma(toplam)
     _DONANIM = {
         "ram_toplam_gb": round(toplam, 1),
         "ram_bos_gb": round(bos, 1),
@@ -352,7 +441,7 @@ def donanim_bilgisi(tazele=False):
         "hizlandirma": hiz,
         # Yalnızca kullanılabilir (CUDA) ekran belleği; AMD/Intel için 0.
         "vram_gb": hiz["vram_gb"],
-        "isletim_sistemi": sys.platform,
+        "isletim_sistemi": _isletim(),
     }
     _DONANIM_ZAMANI = time.time()
     return dict(_DONANIM)
@@ -394,9 +483,93 @@ def _disk_turleri():
     return sonuc
 
 
+def _sistem_yolu():
+    """Sistem diskinde bir yol: Windows'ta SystemRoot; Linux'ta kök (/);
+    macOS'ta ev klasörü (sistem birimi salt okunurdur; güncellemeler ve sanal
+    bellek ev klasörüyle aynı veri birimindedir)."""
+    if platform_katmani.windows_mu():
+        return os.environ.get("SystemRoot", os.path.expanduser("~"))
+    if platform_katmani.macos_mu():
+        return os.path.expanduser("~")
+    return os.path.abspath(os.sep)
+
+
+def _baglama_noktasi(yol):
+    """Linux/macOS: yolun bulunduğu diskin bağlama noktası (/, /home, /media/usb ...)."""
+    yol = os.path.realpath(_var_olan_ust(yol))
+    while not os.path.ismount(yol):
+        ust = os.path.dirname(yol)
+        if ust == yol:
+            break
+        yol = ust
+    return yol
+
+
+def _ayni_disk(a, b):
+    """İki yol aynı diskte mi? Windows'ta sürücü harfi, diğerlerinde st_dev."""
+    if platform_katmani.windows_mu():
+        return _surucu(a).upper() == _surucu(b).upper()
+    try:
+        return os.stat(_var_olan_ust(a)).st_dev == os.stat(_var_olan_ust(b)).st_dev
+    except OSError:
+        return _surucu(a) == _surucu(b)
+
+
+def _proc_mounts_coz(metin):
+    r"""/proc/mounts'taki \040 gibi sekizlik kaçışları çözer."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), metin)
+
+
+_ATLANAN_BAGLAMALAR = ("/boot", "/snap", "/var/snap", "/efi", "/proc", "/sys", "/dev",
+                       "/run/user", "/var/lib/docker")
+
+
+def _posix_diskleri(mounts="/proc/mounts"):
+    """Linux: /proc/mounts'tan gerçek disk bölümleri; macOS: /Volumes altındakiler."""
+    noktalar = []
+    if platform_katmani.linux_mu():
+        try:
+            with open(mounts, encoding="utf-8", errors="replace") as f:
+                satirlar = f.read().splitlines()
+        except OSError:
+            satirlar = []
+        for satir in satirlar:
+            parca = satir.split()
+            if len(parca) < 3 or not parca[0].startswith("/dev/") \
+                    or parca[0].startswith("/dev/loop"):
+                continue
+            nokta = _proc_mounts_coz(parca[1])
+            if any(nokta == a or nokta.startswith(a + "/") for a in _ATLANAN_BAGLAMALAR):
+                continue
+            noktalar.append(nokta)
+    elif platform_katmani.macos_mu():
+        try:
+            for ad in sorted(os.listdir("/Volumes")):
+                yol = os.path.join("/Volumes", ad)
+                if os.path.ismount(yol) and not os.path.islink(yol):
+                    noktalar.append(yol)
+        except OSError:
+            pass
+    return noktalar
+
+
 def _sabit_suruculer():
     if not platform_katmani.windows_mu():
-        return [os.path.expanduser("~")]
+        # Linux/macOS: ev klasörünün, sistemin ve model klasörünün diskleri ile
+        # diğer bağlı diskler; aynı disk (st_dev) bir kez sayılır.
+        adaylar = [_surucu(os.path.expanduser("~")), _surucu(_sistem_yolu()),
+                   _surucu(model_dizini()), *_posix_diskleri()]
+        sonuc, gorulen = [], set()
+        for kok in adaylar:
+            try:
+                aygit = os.stat(kok).st_dev
+            except OSError:
+                continue
+            if aygit in gorulen:
+                continue
+            gorulen.add(aygit)
+            sonuc.append(kok)
+        return sonuc
     try:
         import ctypes
         maske = ctypes.windll.kernel32.GetLogicalDrives()
@@ -412,12 +585,22 @@ def _sabit_suruculer():
 
 
 def _surucu(yol):
+    """Windows'ta "C:\\"; Linux/macOS'ta yolun diskinin bağlama noktası."""
+    if not platform_katmani.windows_mu():
+        return _baglama_noktasi(yol)
     s = os.path.splitdrive(os.path.abspath(yol))[0]
     return (s.upper() + "\\") if s else os.path.abspath(os.sep)
 
 
+def _surucu_etiketi(harf):
+    """Notlarda diskin adı: Windows'ta "D: sürücüsünde", diğerlerinde "/media/usb diskinde"."""
+    if platform_katmani.windows_mu():
+        return f"{harf}: sürücüsünde"
+    return f"{harf} diskinde"
+
+
 def _ayrilacak_gb(toplam, sistem):
-    """Sürücüde boş bırakılacak pay: sistem sürücüsünde Windows güncellemeleri
+    """Sürücüde boş bırakılacak pay: sistem sürücüsünde sistem güncellemeleri
     ve sanal bellek için %3 (en az 2, en çok 10 GB), diğerlerinde %2 (1–5 GB)."""
     if sistem:
         return max(2.0, min(10.0, toplam * 0.03))
@@ -430,8 +613,7 @@ def kullanilabilir_gb(dizin):
         u = shutil.disk_usage(_var_olan_ust(dizin))
     except OSError:
         return 0.0
-    sistem = _surucu(os.environ.get("SystemRoot", os.path.expanduser("~")))
-    ayrilan = _ayrilacak_gb(u.total / 2**30, _surucu(dizin).upper() == sistem.upper())
+    ayrilan = _ayrilacak_gb(u.total / 2**30, _ayni_disk(dizin, _sistem_yolu()))
     return max(0.0, u.free / 2**30 - ayrilan)
 
 
@@ -445,10 +627,18 @@ def _var_olan_ust(yol):
     return yol
 
 
+def _onerilen_model_dizini(kok):
+    """Başka diske taşıma önerisi. Linux/macOS'ta ev klasörünün diskiyse ev
+    klasöründe (kök klasöre yazılamaz), değilse o diskin kökünde."""
+    if not platform_katmani.windows_mu() and _ayni_disk(kok, os.path.expanduser("~")):
+        return os.path.join(os.path.expanduser("~"), "TurKod", "modeller")
+    return os.path.join(kok, "TurKod", "modeller")
+
+
 def depolama_analizi():
-    sistem = _surucu(os.environ.get("SystemRoot", os.path.expanduser("~")))
+    sistem = _sistem_yolu()
     turler = _disk_turleri()
-    model_surucu = _surucu(model_dizini())
+    windows = platform_katmani.windows_mu()
     suruculer = []
     for kok in _sabit_suruculer():
         try:
@@ -456,14 +646,16 @@ def depolama_analizi():
         except OSError:
             continue
         toplam, bos = u.total / 2**30, u.free / 2**30
-        sistem_mi = kok.upper() == sistem.upper()
+        sistem_mi = _ayni_disk(kok, sistem)
         ayrilan = _ayrilacak_gb(toplam, sistem_mi)
+        # "harf": Windows'ta sürücü harfi, Linux/macOS'ta bağlama noktası.
+        harf = kok[:1].upper() if windows else kok
         suruculer.append({
-            "kok": kok, "harf": kok[:1].upper(), "toplam_gb": round(toplam, 1),
-            "bos_gb": round(bos, 1), "tur": turler.get(kok[:1].upper(), "?"),
+            "kok": kok, "harf": harf, "toplam_gb": round(toplam, 1),
+            "bos_gb": round(bos, 1), "tur": turler.get(harf, "?"),
             "sistem": sistem_mi, "ayrilan_gb": round(ayrilan, 1),
             "kullanilabilir_gb": round(max(0.0, bos - ayrilan), 1),
-            "model_surucusu": kok.upper() == model_surucu.upper(),
+            "model_surucusu": _ayni_disk(kok, model_dizini()),
         })
     modeller_gb = sum(m["boyut_gb"] for m in yuklu_modeller())
     secili = next((s for s in suruculer if s["model_surucusu"]), None)
@@ -473,11 +665,11 @@ def depolama_analizi():
     en_iyi = aday[0] if aday else None
     notlar = []
     if secili and secili["kullanilabilir_gb"] < 5:
-        notlar.append(f"{secili['harf']}: sürücüsünde model için çok az yer var "
+        notlar.append(f"{_surucu_etiketi(secili['harf'])} model için çok az yer var "
                       f"({secili['kullanilabilir_gb']} GB kullanılabilir).")
     if en_iyi and secili and en_iyi["kok"] != secili["kok"] and \
             en_iyi["kullanilabilir_gb"] > secili["kullanilabilir_gb"] + 5:
-        notlar.append(f"{en_iyi['harf']}: sürücüsünde daha çok yer var "
+        notlar.append(f"{_surucu_etiketi(en_iyi['harf'])} daha çok yer var "
                       f"({en_iyi['kullanilabilir_gb']} GB); model klasörünü oraya taşıyabilirsiniz.")
     if secili and secili["tur"] == "HDD":
         notlar.append("Model klasörü sabit diskte (HDD): modeller yavaş yüklenir, SSD önerilir.")
@@ -491,7 +683,7 @@ def depolama_analizi():
         # yok" deniyordu. Boş alan klasörün kendi yolundan hesaplanır.
         "kullanilabilir_gb": (secili["kullanilabilir_gb"] if secili
                               else round(kullanilabilir_gb(model_dizini()), 1)),
-        "onerilen_dizin": (os.path.join(en_iyi["kok"], "TurKod", "modeller")
+        "onerilen_dizin": (_onerilen_model_dizini(en_iyi["kok"])
                            if en_iyi and secili and en_iyi["kok"] != secili["kok"] else None),
         "notlar": notlar,
     }
@@ -562,8 +754,9 @@ def _dogrulandi_mi(tur):
 
 
 def etkin_motor():
-    """Kullanılacak motor: doğrulanmış CUDA, yoksa doğrulanmış CPU, yoksa None."""
-    for tur in ("cuda", "cpu"):
+    """Kullanılacak motor: doğrulanmış ekran kartı motoru (CUDA / Vulkan), yoksa
+    doğrulanmış CPU, yoksa None."""
+    for tur in (*GPU_TURLERI, "cpu"):
         if _motor_surumu(tur) and _dogrulandi_mi(tur):
             return tur
     return None
@@ -575,14 +768,14 @@ def motor_durumu():
     with _KURULUM_KILIDI:
         kurulum = {k: (list(v) if isinstance(v, list) else v) for k, v in _KURULUM.items()}
     kurulu = {}
-    for tur in ("cpu", "cuda"):
+    for tur in ("cpu", *GPU_TURLERI):
         surum = _motor_surumu(tur)
         dog = _dogrulandi_mi(tur)
         if surum:
             kurulu[tur] = {"surum": surum, "dogrulandi": bool(dog),
                            "gpu": bool(dog and dog.get("gpu"))}
-    onerilen = "cuda" if hiz["tur"] == "cuda" else "cpu"
-    paket = hiz["paket"] if onerilen == "cuda" else "cpu"
+    onerilen = hiz["tur"] if hiz["tur"] in GPU_TURLERI else "cpu"
+    paket = hiz["paket"] if onerilen != "cpu" else cpu_paketi()
     return {
         "ok": True,
         "kurulu": kurulu,
@@ -594,7 +787,7 @@ def motor_durumu():
         "kurulum": kurulum,
         # Ekran kartı sürümü bu bilgisayarda çalışmadıysa nedeni (arayüz büyük
         # düğme yerine kısa bir not + "Yeniden dene" gösterir).
-        "cuda_hata": _cuda_hatasi() if etkin_motor() != "cuda" else None,
+        "cuda_hata": _cuda_hatasi() if etkin_motor() not in GPU_TURLERI else None,
         "sunucu": sunucu_durumu(),
     }
 
@@ -605,12 +798,22 @@ def _gunluk(metin):
         del _KURULUM["gunluk"][:-60]
 
 
+def cpu_paketi(isletim=None, makine=None):
+    """İşlemci motorunun paketi: Apple Silicon'da Metal'li paket, Intel Mac'te
+    hazır paketi olan son sürüm, diğerlerinde CPU paketi."""
+    isletim = isletim or _isletim()
+    makine = (makine or platform.machine()).lower()
+    if isletim == "darwin":
+        return "metal" if makine in ("arm64", "aarch64") else "cpu-intel-mac"
+    return "cpu"
+
+
 def _pip_komutu(py, hedef, paket):
-    _, surum = MOTOR_PAKETLERI[paket]
+    klasor, surum = MOTOR_PAKETLERI[paket]
     return [py, "-m", "pip", "install", "--target", hedef, "--upgrade",
             "--only-binary=:all:", "--no-warn-script-location",
             "--disable-pip-version-check", "--progress-bar", "off",
-            "--extra-index-url", WHL_INDEKS.format(paket=paket),
+            "--extra-index-url", WHL_INDEKS.format(paket=klasor),
             f"llama-cpp-python=={surum}", *CUDA_KITAPLIKLARI.get(paket, [])]
 
 
@@ -628,7 +831,7 @@ def _pip_kur(tur, paket):
     komut = _pip_komutu(py, gecici, paket)
     _gunluk(f"pip ile llama-cpp-python {surum} ({paket}) kuruluyor…"
             + (" (CUDA çalışma kitaplıklarıyla birlikte)" if paket in CUDA_KITAPLIKLARI else ""))
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PIP_NO_INPUT="1")
+    env = _ortam(PYTHONIOENCODING="utf-8", PIP_NO_INPUT="1")
     env.pop("PYTHONPATH", None)
     try:
         p = subprocess.Popen(komut, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -671,7 +874,8 @@ def _motor_hatasi(metin):
     k = metin.lower()
     if "could not find module" in k or "dependencies" in k or "dll load failed" in k \
             or "cudart" in k or "cublas" in k:
-        metin = "CUDA kitaplıkları (DLL) yüklenemedi"
+        metin = ("CUDA kitaplıkları (DLL) yüklenemedi" if platform_katmani.windows_mu()
+                 else "CUDA kitaplıkları yüklenemedi")
     elif "gpu" in k and "kullanam" in k:
         metin = "motor ekran kartını kullanamıyor (sürücü eski olabilir)"
     with _KURULUM_KILIDI:
@@ -698,7 +902,8 @@ def motoru_dogrula(tur):
     try:
         r = subprocess.run([py, "-c", _DOGRULAMA_KODU, motor_dizini(tur),
                             os.path.dirname(_sunucu_betigi())],
-                           capture_output=True, text=True, timeout=120, **_bayrak())
+                           capture_output=True, text=True, timeout=120, env=_ortam(),
+                           **_bayrak())
         satir = (r.stdout or "").strip().splitlines()[-1] if r.stdout.strip() else ""
         sonuc = json.loads(satir) if satir.startswith("{") else None
     except Exception as e:  # noqa: BLE001
@@ -710,8 +915,8 @@ def motoru_dogrula(tur):
         satirlar = [s for s in (r.stderr or "").splitlines() if s.strip()]
         _motor_hatasi(satirlar[-1] if satirlar else "motor yüklenemedi")
         return None
-    if tur == "cuda" and not sonuc.get("gpu"):
-        _gunluk("CUDA motoru ekran kartını kullanamıyor.")
+    if tur in GPU_TURLERI and not sonuc.get("gpu"):
+        _gunluk("Ekran kartı motoru ekran kartını kullanamıyor.")
         _motor_hatasi("motor ekran kartını kullanamıyor (sürücü eski olabilir)")
         return None
     with open(_dogrulama_dosyasi(tur), "w", encoding="utf-8") as f:
@@ -723,8 +928,11 @@ def motor_kur(tur=None):
     """Motoru arka planda kurar. tur None: donanıma göre (CUDA ya da CPU).
     CUDA kurulamaz ya da çalışmazsa CPU sürümü kurulur."""
     hiz = donanim_bilgisi(tazele=True)["hizlandirma"]
-    tur = tur or ("cuda" if hiz["tur"] == "cuda" else "cpu")
-    if tur == "cuda" and hiz["tur"] != "cuda":
+    tur = tur or (hiz["tur"] if hiz["tur"] in GPU_TURLERI else "cpu")
+    if tur == "cuda" and hiz["tur"] in GPU_TURLERI:
+        # Arayüzün "ekran kartı sürümünü kur" düğmesi: önerilen ekran kartı motoru.
+        tur = hiz["tur"]
+    if tur in GPU_TURLERI and hiz["tur"] != tur:
         return {"ok": False, "hata": hiz["aciklama"]}
     with _KURULUM_KILIDI:
         if _KURULUM["durum"] == "kuruluyor":
@@ -741,12 +949,12 @@ def motor_kur(tur=None):
         tamam, hata_metni, sonuc_tur, cpuya_dustu = False, "", None, False
         try:
             sunucuyu_durdur()
-            if tur == "cuda":
+            if tur in GPU_TURLERI:
                 try:
-                    if _pip_kur("cuda", hiz["paket"]) and motoru_dogrula("cuda"):
-                        tamam, sonuc_tur = True, "cuda"
+                    if _pip_kur(tur, hiz["paket"]) and motoru_dogrula(tur):
+                        tamam, sonuc_tur = True, tur
                 except Exception as e:  # noqa: BLE001
-                    _gunluk(f"CUDA kurulumunda hata: {e}")
+                    _gunluk(f"Ekran kartı motorunun kurulumunda hata: {e}")
                     _motor_hatasi(str(e))
                 if tamam:
                     try:
@@ -754,8 +962,8 @@ def motor_kur(tur=None):
                     except OSError:
                         pass
                 else:
-                    _gunluk("Ekran kartı (CUDA) sürümü çalışmadı; işlemci (CPU) sürümüne geçiliyor.")
-                    shutil.rmtree(motor_dizini("cuda"), ignore_errors=True)
+                    _gunluk("Ekran kartı sürümü çalışmadı; işlemci (CPU) sürümüne geçiliyor.")
+                    shutil.rmtree(motor_dizini(tur), ignore_errors=True)
                     # Başarısızlık kaydedilir: arayüz büyük "kur" düğmesini
                     # yeniden göstermez, nedenini ve "Yeniden dene"yi gösterir.
                     with _KURULUM_KILIDI:
@@ -770,7 +978,7 @@ def motor_kur(tur=None):
                         pass
                     cpuya_dustu = True
             if not tamam:
-                tamam = bool(_pip_kur("cpu", "cpu") and motoru_dogrula("cpu"))
+                tamam = bool(_pip_kur("cpu", cpu_paketi()) and motoru_dogrula("cpu"))
                 sonuc_tur = "cpu" if tamam else None
         except Exception as e:  # noqa: BLE001
             _gunluk(f"Kurulum hatası: {e}")
@@ -793,7 +1001,7 @@ def motor_kur(tur=None):
 
 def motor_kaldir():
     sunucuyu_durdur()
-    for tur in ("cpu", "cuda"):
+    for tur in ("cpu", *GPU_TURLERI):
         shutil.rmtree(motor_dizini(tur), ignore_errors=True)
     return {"ok": True}
 
@@ -906,8 +1114,12 @@ def _sunucu_baslat():
                  "--azami-model", "2" if d["ram_toplam_gb"] >= 12 else "1",
                  # Eskiden verilmiyordu: her model 4096 bağlamla açılıyordu.
                  "--baglam", str(baglam_siniri(d["ram_toplam_gb"]))]
-        if tur == "cuda":
+        if tur in GPU_TURLERI:
             komut += ["--gpu", "--vram", str(d["vram_gb"])]
+        elif (d.get("hizlandirma") or {}).get("metal") and \
+                (_dogrulandi_mi("cpu") or {}).get("gpu"):
+            # Apple Silicon: Metal'li motor ekran kartını kullanabiliyorsa.
+            komut += ["--gpu", "--vram", str(d["hizlandirma"].get("metal_bellek_gb", 0))]
         gunluk = os.path.join(_veri_dizini(), "sunucu.log")
         try:
             cikis = open(gunluk, "w", encoding="utf-8", errors="replace")
@@ -916,7 +1128,7 @@ def _sunucu_baslat():
         try:
             p = subprocess.Popen(komut, stdout=cikis, stderr=subprocess.STDOUT,
                                  stdin=subprocess.DEVNULL,
-                                 env=dict(os.environ, PYTHONIOENCODING="utf-8"),
+                                 env=_ortam(PYTHONIOENCODING="utf-8"),
                                  **_bayrak())
         except OSError as e:
             raise YerelAIHatasi(f"Yerel AI sunucusu başlatılamadı: {e}") from None

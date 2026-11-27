@@ -126,6 +126,7 @@ Pratik notlar (ilk çekimde öğrenildi):
 | panel_duzeni.png | Panel düzeni menüsü | En sağ üstteki düğme (1392, 62); (1126, 84)-(1414, 330) |
 | kodi_selam_dusunme.png | Kodi selam verirken ve düşünürken, yan yana | Sol şeritteki Kodi düğmesi (30, 353); selamdan sonra soru yazıldı. Yapay zekâ olarak yerelde (127.0.0.1) hazır cevap veren taklit bir OpenAI uyumlu sunucu kullanıldı (Ayarlar: "ozel" sağlayıcı, `kodi_dusunme: true`); iki kare (476, 352)-(972, 850). 2026-11-07: sağdaki robot yeni düşünme pozuyla (el çenede, öbür el dirsekte) değiştirildi: `KodiRessami(ifade: dusunceli)` 432x560 saydam çizildi, 1,075 ölçekle (934, 405)'e kondu |
 | kodi_eylem.png | Kodi terminali açmış, kodu yazmak için izin istiyor | Taklit sunucuya "1den 5e sayan bir program yaz" soruldu (cevapta eylem bloğu: panel terminal, kod_yaz, komut run.run); terminal açılınca Kodi yukarı çıkar, balon tekerlekle bir adım yukarı kaydırıldı; (440, 80)-(980, 610). Not: Kodi artık bütün çalışma alanının üstünde; çekimden önce profilde `kodi_konum` olmamalı (varsayılan köşe) |
+| kodi_halleri.png | Kodi'nin 10 hâli (yüz + poz + efekt), altında adları | 2026-11-26, program açılmadan: geçici bir `flutter test` dosyasında `KodiRobotu(boy: 150, ifade:, poz:, efekt:)` koyu kartlarda çizildi; yazılar için `tools/kitap/fontlar/` DejaVu fontları `FontLoader` ile yüklendi (`kMonoFontFamily` adıyla da: "?", "!", "z" efektleri). `RenderRepaintBoundary.toImage(pixelRatio: 2)`, beyaz kenar kırpıldı, 1300 px genişliğe indirildi |
 | kodi_cevap.png | Kodi'nin cevabı (TürKod kodlu) | Aynı çekim, cevap yazılıp bitince; (476, 215)-(972, 850) |
 | kodi_yonetim.png | Kodi'nin balonu: sekmeye geçti, EXE panelini açtı, Ayarlar'da Kodi bölümünü açtı | 2026-11-06, kullanıcının oturumunda; üç istek yerel komut çözücüyle (yapay zekâsız) yapıldı; balon kırpıldı (ekran 1920x1080: (1262, 118)-(1592, 706)) |
 | ayarlar_kodi.png | Ayarlar → Kodi kartı (Kodi'nin yetkileri) | Kodi'ye "Ayarlarda Kodi bölümünü aç" denildi, tekerlekle 2 adım aşağı kaydırıldı; kart kırpıldı ((418, 262)-(1267, 788)) |
@@ -160,6 +161,11 @@ Pratik notlar (ilk çekimde öğrenildi):
 | kodi_sohbetler.png | Kodi balonunda Sohbetler paneli | Kodi açıldı, Sohbetler düğmesi; tek kayıtlı sohbet ("Döngü nedir?") |
 | tarayici_kodi.png | Tarayıcı sekmesinde GitHub sayfası ve Kodi | "Google'da YusufX-sys turkod-ide github ara ve depoya tıkla"; adres çubuğundan sayfa altına kırpıldı |
 | kurulum_rehberi.png | Kurulum rehberi (Groq giriş sayfası + adımlar) | Tarayıcıdaki anahtar düğmesi; giriş yapılmadan, kişisel bilgi görünmeden |
+
+| kutuphane_rehberi.png | Kütüphane Rehberi, "satranç" araması, "Satranç (python-chess)" seçili | Öğren menüsü (551, 62) → Kütüphane Rehberi (604, 186), "satranç" yazıldı, ilk karta (144, 313) tıklandı; pencerenin üst kısmı (73, 90)-(1352, 442). 2026-11-24: Türkçe adlar ("içe_aktar satranç", "pip yükle satranç") gelince yeniden çekildi |
+
+`menuler_2.png`'nin Öğren paneli 2026-11-24'te (Kütüphane Rehberi eklenince) yeniden çekildi:
+menü açılıp (508, 44)-(874, 216) kırpıldı ve eski panelin yerine (x=449, y=0) yapıştırıldı.
 
 `menuler_1.png`'nin sağ paneli (Çalıştır menüsü) 2026-11-03'te yeniden çekildi: menü açılıp
 (383, 20)-(757, 716) bölgesi kırpıldı ve eski panelin yerine (x=860) yapıştırıldı.

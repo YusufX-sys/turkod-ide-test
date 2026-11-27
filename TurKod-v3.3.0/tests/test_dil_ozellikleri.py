@@ -341,7 +341,10 @@ class CekirdekDuzeltmeTestleri(unittest.TestCase):
             "        kendisi.t.ileri(kendisi.hız)\n"
             "        yazdır(kendisi.hız, kendisi.renk)\n")
         self.assertIn("self.t.speed(0)", py)
-        self.assertIn("self.t.color('kırmızı')", py)
+        # Renk değeri de Python'a çevrilir ("kırmızı" -> "red").
+        self.assertIn("self.t.color('red')", py)
+        # Kullanıcının kendi metni (kendisi.renk = 'mavi') değişmez.
+        self.assertIn("self.renk = 'mavi'", py)
         self.assertIn("self.t.forward(self.hız)", py)
         self.assertIn("print(self.hız, self.renk)", py)
         self.assertIn("self.hız = 5", py)

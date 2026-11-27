@@ -193,6 +193,8 @@ if ($SadeceInno) {
     $Belgeler = Join-Path $Kok "belgeler"
     if (Test-Path $Belgeler) {
         Copy-Item $Belgeler (Join-Path $Cikis "belgeler") -Recurse -Force
+        # İç belge (kitabın bakım kılavuzu): pakete girmez.
+        Remove-Item (Join-Path $Cikis "belgeler\KITAP_BAKIM.md") -Force -ErrorAction SilentlyContinue
     } else {
         Write-Warning "belgeler\ klasörü yok; kitap ve lisans dosyaları pakete girmeyecek."
     }

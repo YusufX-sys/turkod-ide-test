@@ -61,6 +61,10 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kodi ile sesli konuşabilmen için mikrofonu kullanır.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Programlarını Terminal penceresinde çalıştırmak için Terminal'i kullanır.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

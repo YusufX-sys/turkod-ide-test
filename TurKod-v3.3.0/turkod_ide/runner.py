@@ -204,6 +204,87 @@ def _tk_pygame_yamala(modul):
     _tk_renk_ekle(modul.THECOLORS)
 
 
+def _tk_renk_normal(ad):
+    return re.sub(r"[\s_\-]+", "", ad.lower()).replace("grey", "gray")
+
+
+def _tk_renk_esle(adlar):
+    """Türkçe renk adı -> kütüphanenin kendi renk adı. Terminal Renkleri ve
+    Zengin Yazı yalnızca kendi adlarını tanır ('light_blue', 'dark_orange');
+    eskiden "turuncu", "beyaz" gibi Türkçe renkler hata veriyordu."""
+    normal = {}
+    for ad in adlar:
+        normal.setdefault(_tk_renk_normal(ad), ad)
+    sonuc = {}
+    for tr, en in _TK_DEGERLER.get("renk", {}).items():
+        n = _tk_renk_normal(en)
+        hedef = normal.get(n) or normal.get(n + "1")   # rich: orange1, gold1, pink1
+        if hedef is not None:
+            for ad in (tr, tr.replace("_", " ")):
+                sonuc.setdefault(ad, hedef)
+    return sonuc
+
+
+def _tk_termcolor_yamala(modul):
+    renkler, zeminler = modul.COLORS, modul.HIGHLIGHTS
+    for tr, ad in _tk_renk_esle(list(renkler)).items():
+        renkler.setdefault(tr, renkler[ad])
+        if "on_" + ad in zeminler:
+            zeminler.setdefault("on_" + tr, zeminler["on_" + ad])
+    for tr, ad in _TK_DEGERLER.get("tc_stil", {}).items():
+        if ad in modul.ATTRIBUTES:
+            modul.ATTRIBUTES.setdefault(tr, modul.ATTRIBUTES[ad])
+
+
+def _tk_rich_renk_yamala(modul):
+    adlar = modul.ANSI_COLOR_NAMES
+    for tr, ad in _tk_renk_esle(list(adlar)).items():
+        if " " not in tr:
+            adlar.setdefault(tr, adlar[ad])
+
+
+def _tk_rich_stil_yamala(modul):
+    stiller = modul.Style.STYLE_ATTRIBUTES
+    for tr, ad in _TK_DEGERLER.get("stil", {}).items():
+        if ad in stiller:
+            stiller.setdefault(tr, stiller[ad])
+
+
+def _tk_folium_cizgi_yamala(modul):
+    renk = _TK_DEGERLER.get("renk", {})
+    asil = modul.path_options
+
+    def path_options(*a, **k):
+        for anahtar in ("color", "fill_color", "fillColor"):
+            if anahtar in k:
+                k[anahtar] = _tk_deger(renk, k[anahtar])
+        return asil(*a, **k)
+
+    modul.path_options = path_options
+
+
+def _tk_folium_simge_yamala(modul):
+    renk = _TK_DEGERLER.get("renk", {})
+    simge = getattr(modul, "Icon", None)
+    if simge is None:
+        return
+    asil = simge.__init__
+
+    def __init__(self, color="blue", icon_color="white", *a, **k):
+        asil(self, _tk_deger(renk, color), _tk_deger(renk, icon_color), *a, **k)
+
+    simge.__init__ = __init__
+
+
+def _tk_ctk_yamala(modul):
+    for ad, tablo in (("set_default_color_theme", _TK_DEGERLER.get("ctk_tema", {})),
+                      ("set_appearance_mode", _TK_DEGERLER.get("ctk_gorunum", {}))):
+        asil = getattr(modul, ad, None)
+        if asil is not None:
+            setattr(modul, ad, (lambda a, t: lambda d, *x, **k: a(_tk_deger(t, d), *x, **k))(
+                asil, tablo))
+
+
 def _tk_matplotlib_yamala(modul):
     tablo = modul.get_named_colors_mapping()
     for tr, en in _TK_DEGERLER.get("renk", {}).items():
@@ -217,10 +298,18 @@ _TK_KULLANICI_SIMGESI = [False]   # pygame.display.set_icon çağrıldı mı
 
 
 def _tk_simge_kullanilsin():
-    """TürKod program simgesi verilsin mi? (Windows, IDE'den çalıştırma; EXE'de
-    EXE'nin kendi simgesi kullanılır.)"""
-    return (os.name == "nt" and not getattr(sys, "frozen", False)
+    """TürKod program simgesi verilsin mi? (IDE'den çalıştırma; EXE'de EXE'nin
+    kendi simgesi kullanılır.) Eskiden yalnızca Windows'ta veriliyordu."""
+    return (not getattr(sys, "frozen", False)
             and bool(_TK_PROGRAM_IKONU) and os.path.isfile(_TK_PROGRAM_IKONU))
+
+
+def _tk_simge_dosyasi():
+    """Windows'ta .ico; Linux/macOS'ta .png (X11 ve macOS .ico'yu simge olarak okumaz)."""
+    if os.name == "nt":
+        return _TK_PROGRAM_IKONU
+    png = _TK_PROGRAM_IKONU[:-4] + ".png"
+    return png if os.path.isfile(png) else _TK_PROGRAM_IKONU
 
 
 # Simge, kütüphaneye pencere OLUŞMADAN önce verilir. Sonradan (pencere
@@ -269,7 +358,12 @@ def _tk_tk_simgesi(modul):
         asil(self, *a, **k)
         if _tk_simge_kullanilsin():
             try:
-                self.iconbitmap(default=_TK_PROGRAM_IKONU)
+                if os.name == "nt":
+                    self.iconbitmap(default=_TK_PROGRAM_IKONU)
+                else:
+                    resim = modul.PhotoImage(master=self, file=_tk_simge_dosyasi())
+                    self.iconphoto(True, resim)
+                    self._tk_simge_resmi = resim   # çöp toplanmasın
             except Exception:
                 pass
 
@@ -289,7 +383,7 @@ def _tk_ursina_yamala(modul):
     def __init__(self, *a, **k):
         if len(a) < 2 and k.get("icon", "textures/ursina.ico") == "textures/ursina.ico" \
                 and _tk_simge_kullanilsin():
-            k["icon"] = _TK_PROGRAM_IKONU
+            k["icon"] = _tk_simge_dosyasi()
         return asil(self, *a, **k)
 
     sinif.__init__ = __init__
@@ -300,9 +394,49 @@ def _tk_panda3d_yamala(modul):
     """Panda3D'nin (ShowBase) açtığı pencerelerin varsayılan simgesi."""
     if _tk_simge_kullanilsin():
         try:
-            modul.loadPrcFileData("", "icon-filename " + _TK_PROGRAM_IKONU)
+            modul.loadPrcFileData("", "icon-filename " + _tk_simge_dosyasi())
         except Exception:
             pass
+
+
+def _tk_dpg_yamala(modul):
+    """Dear PyGui (hızlı_arayüz): bağlam oluşturulmadan (create_context) bir
+    öğe eklemek Python sürecini "Segmentation fault" ile ÇÖKERTİYOR; çocuk hiçbir
+    hata görmeden programının kaybolduğunu görüyordu. Bağlam yokken yapılan her
+    çağrı artık Türkçe bir hata verir."""
+    import functools
+    bagli = [False]
+    asil_kur, asil_yik = modul.create_context, modul.destroy_context
+
+    def create_context(*a, **k):
+        sonuc = asil_kur(*a, **k)
+        bagli[0] = True
+        return sonuc
+
+    def destroy_context(*a, **k):
+        bagli[0] = False
+        return asil_yik(*a, **k)
+
+    def koru(f):
+        @functools.wraps(f)
+        def sarmal(*a, **k):
+            if not bagli[0]:
+                raise RuntimeError(
+                    "Dear PyGui (hızlı_arayüz) kullanmadan önce bağlam_oluştur() "
+                    "(dpg.create_context()) çağırmalısın; yoksa program çöker.")
+            return f(*a, **k)
+        return sarmal
+
+    serbest = {"create_context", "destroy_context", "get_dearpygui_version"}
+    for ad in dir(modul):
+        nesne = getattr(modul, ad, None)
+        if (ad.startswith("_") or ad in serbest or isinstance(nesne, type)
+                or not callable(nesne)
+                or not str(getattr(nesne, "__module__", "") or "").startswith("dearpygui")):
+            continue
+        setattr(modul, ad, koru(nesne))
+    modul.create_context = create_context
+    modul.destroy_context = destroy_context
 
 
 def _tk_ice_aktarma_yamalari_kur():
@@ -317,7 +451,14 @@ def _tk_ice_aktarma_yamalari_kur():
                "pygame.display": _tk_pygame_display_yamala,
                "ursina.main": _tk_ursina_yamala,
                "panda3d.core": _tk_panda3d_yamala,
-               "matplotlib.colors": _tk_matplotlib_yamala}
+               "matplotlib.colors": _tk_matplotlib_yamala,
+               "dearpygui.dearpygui": _tk_dpg_yamala,
+               "termcolor.termcolor": _tk_termcolor_yamala,
+               "rich.color": _tk_rich_renk_yamala,
+               "rich.style": _tk_rich_stil_yamala,
+               "folium.vector_layers": _tk_folium_cizgi_yamala,
+               "folium.map": _tk_folium_simge_yamala,
+               "customtkinter": _tk_ctk_yamala}
 
     class _Bulucu(importlib.abc.MetaPathFinder):
         def find_spec(self, ad, yol=None, hedef=None):
@@ -582,6 +723,10 @@ def _yerel_modul_adi(yol, dosya_adi):
 _TK_ONERI_KELIMELERI = []
 # Bilinen modül adları (Türkçe ve Python): yanlış yazılmış modül adına öneri.
 _TK_MODUL_ADLARI = []
+# Kurulması gereken kütüphaneler: Python kök modülü -> "pip yükle" ile yazılacak
+# Türkçe ad ("folium" -> "etkileşimli_harita"). Kütüphane kurulu değilse hata
+# iletisi nasıl kurulacağını da söyler.
+_TK_KURULUM = {}
 # Python adı -> kullanıcının yazdığı TürKod kelimesi (runner_kodu_uret yazar).
 # Hata mesajları çevrilmiş adı ('number', 'append', 'list') değil, öğrencinin
 # kodunda gördüğü adı ('sayı', 'sona_ekle', 'liste') göstersin diye.
@@ -690,6 +835,11 @@ def _hata_yazdir(e, tb, dosya_adi):
         oneri = None
     if oneri:
         hata_detay += f" Bunu mu demek istediniz: '{oneri}'?"
+    elif isinstance(e, ModuleNotFoundError) and getattr(e, "name", None):
+        kurulum = _TK_KURULUM.get(e.name.split(".")[0])
+        if kurulum:
+            hata_detay += (f" Bu kütüphane ayrıca kurulur: terminale 'pip yükle {kurulum}' "
+                           f"yaz (internet gerekir).")
     print(f"Açıklama: {hata_detay}")
     print("=" * 50)
     return satir_no, hata_adi_tr, hata_detay
@@ -1155,6 +1305,60 @@ _TAM_MESAJLAR = [
      lambda m: f"'{_metot_adi(m.group(1))}' {_SAYI_SINIRI[m.group(2) or 'exactly']} "
                f"{m.group(3)} değer alır ama {m.group(4)} değer verildi!"
                f"{_metot_ipucu(m.group(1))}"),
+    # --- Çocuk kütüphaneleri: Pygame Zero, Dear PyGui, Arduino, Raspberry Pi, Ollama ... ---
+    (r"^invalid color name$",
+     "bilinmeyen renk adı! Rengi Türkçe (\"kırmızı\", \"açık_mavi\"), İngilizce (\"red\") "
+     "ya da (255, 0, 0) gibi sayılarla yaz."),
+    (r"^[\"']?No '(images|sounds|music|fonts)' directory found to load \w+ '(.+?)'\.?[\"']?$",
+     lambda m: f"'{m.group(2)}' yüklenemedi: programın yanında '{m.group(1)}' klasörü yok! "
+               f"Resimleri 'images', sesleri 'sounds', müzikleri 'music', yazı tiplerini "
+               f"'fonts' klasörüne koy."),
+    (r"^[\"']?No (image|sound|music|font) found like '(.+?)'.*$",
+     lambda m: f"'{m.group(2)}' adında bir "
+               f"{ {'image': 'resim', 'sound': 'ses', 'music': 'müzik', 'font': 'yazı tipi'}[m.group(1)]}"
+               f" dosyası bulunamadı! Dosya adını uzantısız ve küçük harflerle yaz, doğru "
+               f"klasörde olduğundan emin ol."),
+    (r"^<built-in function (\w+)> returned a result with an exception set$",
+     "öğe eklenemedi: öğeler bir pencerenin içinde olmalı "
+     "(önce `ile dpg.pencere_bloğu(...):` bloğunu aç)!"),
+    (r"^could not open port '(.+?)':.*$",
+     lambda m: f"'{m.group(1)}' portu açılamadı: kart takılı mı, port adı doğru mu? "
+               f"Arduino IDE gibi başka bir program portu kullanıyor olabilir."),
+    (r"^Could not find a serial port\.?$",
+     "Arduino bulunamadı: kartı USB ile tak; kartta StandardFirmata yüklü olmalı."),
+    (r"^Unable to load any default pin factory!?$",
+     "Raspberry Pi pinleri bulunamadı: bu bilgisayar bir Raspberry Pi değil. Denemek için "
+     "programın başına os.environ[\"GPIOZERO_PIN_FACTORY\"] = \"mock\" ekle."),
+    (r"^Failed to connect to Ollama.*$",
+     "Ollama'ya bağlanılamadı: Ollama programı kurulu ve açık olmalı (ollama.com/download)."),
+    (r"^model [\"']?(.+?)[\"']? not found.*$",
+     lambda m: f"'{m.group(1)}' modeli bilgisayarda yok; önce terminalde "
+               f"'ollama pull {m.group(1)}' yazıp indir."),
+    (r"^.*missing 1 required positional argument: 'user_agent'$",
+     "Vikipedi'ye bağlanırken kendini tanıtmalısın: user_agent=\"TurKod-Ogrenci\" ekle."),
+    (r"^Code length overflow\. Data size \((\d+)\) > size available \((\d+)\)$",
+     lambda m: f"yazı karekoda sığmıyor ({m.group(1)} > {m.group(2)}): yazıyı kısalt ya da "
+               f"version'u büyüt (fit=True ile kendisi seçer)."),
+    (r"^<urlopen error \[(?:Errno|WinError) (?:11001|11002|-2|-3|-5|8)\].*>$",
+     "adrese ulaşılamadı: internet bağlantını ve adresin doğru yazıldığını kontrol et."),
+    (r"^<urlopen error (.+)>$", lambda m: f"adrese bağlanılamadı: {m.group(1)}"),
+    (r"^unknown url type: '(.+?)'$",
+     lambda m: f"'{m.group(1)}' geçerli bir web adresi değil; başına https:// ekle."),
+    (r"^HTTP Error 404: .*$", "sayfa bulunamadı (404): adresi kontrol et."),
+    (r"^HTTP Error (\d+): (.+)$",
+     lambda m: f"sunucu {m.group(1)} hatası döndürdü ({m.group(2)})."),
+    (r"^process PID not found \(pid=(\d+)\)$",
+     lambda m: f"{m.group(1)} numaralı süreç bulunamadı (kapanmış olabilir)!"),
+    (r"^Language not supported: (.+)$",
+     lambda m: f"'{m.group(1)}' dili desteklenmiyor; Türkçe için lang=\"tr\" yaz."),
+    (r"^Failed to connect\. Probable cause: .*$",
+     "seslendirme sunucusuna bağlanılamadı; internet bağlantını kontrol et."),
+    (r"^Invalid configuration for faker locale `(.+?)`$",
+     lambda m: f"'{m.group(1)}' dil kodu tanınmıyor; Türkçe için Faker(\"tr_TR\") yaz."),
+    (r"^Dynamic bodies must have a mass > 0.*$",
+     "hareket eden cismin kütlesi ve eylemsizlik momenti 0'dan büyük olmalı "
+     "(örneğin Body(1, 10))!"),
+    (r"^Stream has ended unexpectedly$", "PDF dosyası bozuk ya da yarım (gerçek bir PDF değil)!"),
     # --- Selenium ---
     (r"^Message: no such element: Unable to locate element: (.+?)(?:\n.*)?$",
      lambda m: f"sayfada öğe bulunamadı: {m.group(1).strip()}"),
@@ -1310,6 +1514,11 @@ def _ozel_aciklama(e):
         return f"{_deger_turu(nesne)} türündeki değerin '{ad}' adında bir özelliği/metodu yok!"
     if (isinstance(e, KeyError) and len(e.args) == 1
             and not str(e.args[0]).startswith("popitem(): ")):
+        # Bazı kütüphaneler açıklamayı KeyError ile verir (Pygame Zero: "No 'images'
+        # directory found ..."): bilinen bir iletiyse o anlatılır.
+        tam = _tam_mesaj_cevir(str(e.args[0])) if isinstance(e.args[0], str) else None
+        if tam is not None:
+            return tam
         return f"sözlükte {e.args[0]!r} anahtarı yok! Önce 'içinde' ile kontrol edin ya da .getir() kullanın."
     tam = _tam_mesaj_cevir(mesaj)
     if tam is not None:
@@ -1377,6 +1586,9 @@ def turkce_hata_aciklamasi(tip, mesaj):
         return (f"{_tr_tur(m.group(1))} türündeki değerin '{_tr_ad(m.group(2))}' adında "
                 f"bir özelliği/metodu yok!")
     if tip == "KeyError" and mesaj and "popitem(): " not in mesaj:
+        tam = _tam_mesaj_cevir(mesaj)
+        if tam is not None:
+            return tam
         return f"sözlükte {mesaj} anahtarı yok! Önce 'içinde' ile kontrol edin ya da .getir() kullanın."
     try:
         aciklama = _ozel_aciklama(Exception(mesaj))
@@ -1438,6 +1650,26 @@ def _oneri_kelimeleri():
         return sorted({str(k) for k in TURKCE_KELIMELER if str(k).isidentifier()})
     except Exception:
         return []
+
+
+def _kurulum_adlari():
+    """Ayrıca kurulan kütüphaneler: Python kök modülü -> "pip yükle" Türkçe adı
+    (Kütüphane Rehberi'nden). pip_tr bu Türkçe adı doğru pip paketine çevirir."""
+    try:
+        try:
+            from .kutuphane_aciklamalari import ACIKLAMALAR
+        except ImportError:
+            from kutuphane_aciklamalari import ACIKLAMALAR
+        tablo = {}
+        for py, bilgi in ACIKLAMALAR.items():
+            if not bilgi.get("standart") and bilgi.get("pip_adi"):
+                tablo.setdefault(py.split(".")[0], bilgi.get("turkce_ad") or py)
+        # Pygame Zero'nun iç paketi (rehberde ayrı kartı yok)
+        if "pgzrun" in tablo:
+            tablo.setdefault("pgzero", tablo["pgzrun"])
+        return tablo
+    except Exception:
+        return {}
 
 
 def _modul_adlari():
@@ -1572,6 +1804,7 @@ def oneri_tablolarini_yerlestir(govde, kaynak_kod=None):
     govde = govde.replace(
         "_TK_HATA_ADLARI = {}",
         f"_TK_HATA_ADLARI = {_kutuphane_hata_adlari()!r}", 1)
+    govde = govde.replace("_TK_KURULUM = {}", f"_TK_KURULUM = {_kurulum_adlari()!r}", 1)
     return govde.replace(
         "_TK_TERS_ADLAR = {}",
         f"_TK_TERS_ADLAR = {_ters_adlar(kaynak_kod)!r}", 1)

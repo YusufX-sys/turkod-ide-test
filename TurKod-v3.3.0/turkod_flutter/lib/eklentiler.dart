@@ -547,6 +547,19 @@ class _EklentiKarti extends StatelessWidget {
 // YEREL MODEL YÖNETİCİSİ (llama-cpp-python)
 // ============================================================================
 
+/// Apple Silicon Mac: işlemci motoru Metal'lidir, modeller ekran kartında hızlanır.
+bool metalVar(Map motorDurumu) =>
+    ((motorDurumu['hizlandirma'] as Map?) ?? const {})['metal'] == true;
+
+/// Motor türünün kullanıcıya görünen adı ('cuda' | 'vulkan' | 'cpu').
+String motorTuruAdi(Object? tur, Map motorDurumu) => tur == 'cuda'
+    ? 'ekran kartı / CUDA'
+    : tur == 'vulkan'
+        ? 'ekran kartı / Vulkan'
+        : metalVar(motorDurumu)
+        ? 'Apple ekran kartı / Metal'
+        : 'işlemci / CPU';
+
 /// Ayarlar sayfasında kaydırılacak bölüm ('ai_gorevler').
 final ValueNotifier<String?> ayarlarHedefi = ValueNotifier<String?>(null);
 
@@ -693,7 +706,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
                   ? 'Motor kurulamadı; ayrıntılar günlükte.'
                   : cpuyaDustu
                       ? 'Ekran kartı sürümü çalışmadı, işlemci sürümü kuruldu.'
-                      : 'Yerel AI motoru kuruldu (${m['etkin'] == 'cuda' ? 'ekran kartı / CUDA' : 'işlemci / CPU'}).',
+                      : 'Yerel AI motoru kuruldu (${motorTuruAdi(m['etkin'], m)}).',
               kind: durum != 'tamam'
                   ? SnackKind.error
                   : cpuyaDustu
@@ -739,8 +752,10 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
   }
 
   Future<void> _klasorSec() async {
-    final yol = await FilePicker.platform
-        .getDirectoryPath(dialogTitle: 'Yerel AI modellerinin indirileceği klasör');
+    final yol = await dosyaPenceresi(
+        context,
+        () => FilePicker.platform
+            .getDirectoryPath(dialogTitle: 'Yerel AI modellerinin indirileceği klasör'));
     if (yol != null && mounted) await _modelDiziniAyarla(yol);
   }
 
@@ -918,7 +933,9 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         .map((g) => '${g['ad']} (${_gb(g['vram_gb'] as num?)})')
         .join(', ');
     final hiz = (d['hizlandirma'] as Map?) ?? const {};
-    final cuda = hiz['tur'] == 'cuda';
+    final metal = hiz['metal'] == true;
+    final vulkan = hiz['tur'] == 'vulkan';
+    final cuda = hiz['tur'] == 'cuda' || metal || vulkan;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Wrap(runSpacing: 4, children: [
         _bilgi(theme, Icons.memory, 'RAM',
@@ -932,7 +949,14 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         Icon(cuda ? Icons.bolt : Icons.developer_board,
             size: 15, color: cuda ? Colors.green.shade400 : Colors.orange.shade400),
         const SizedBox(width: 5),
-        Text(cuda ? 'Hızlandırma: ekran kartı (CUDA) — ' : 'Hızlandırma yok — ',
+        Text(
+            metal
+                ? 'Hızlandırma: Apple ekran kartı (Metal) — '
+                : vulkan
+                    ? 'Hızlandırma: ekran kartı (Vulkan) — '
+                    : cuda
+                    ? 'Hızlandırma: ekran kartı (CUDA) — '
+                    : 'Hızlandırma yok — ',
             style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
         Expanded(
           child: Text(hiz['aciklama']?.toString() ?? '',
@@ -948,7 +972,8 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
     final kurulum = (m['kurulum'] as Map?) ?? const {};
     final kurulu = (m['kurulu'] as Map?) ?? const {};
     final etkin = m['etkin']?.toString();
-    final onerilenCuda = m['onerilen'] == 'cuda';
+    // Önerilen motor ekran kartı motoru mu (NVIDIA CUDA ya da Vulkan)?
+    final onerilenCuda = m['onerilen'] == 'cuda' || m['onerilen'] == 'vulkan';
     final cudaHata = m['cuda_hata'] is Map ? m['cuda_hata'] as Map : null;
     final gunluk = (kurulum['gunluk'] as List? ?? const []).map((e) => '$e').toList();
     final sunucu = (m['sunucu'] as Map?) ?? const {};
@@ -997,7 +1022,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-                'Yerel AI motoru kuruluyor (${kurulum['tur'] == 'cuda' ? 'ekran kartı / CUDA' : 'işlemci / CPU'})… '
+                'Yerel AI motoru kuruluyor (${motorTuruAdi(kurulum['tur'], m)})… '
                 '${kurulum['asama'] ?? ''}',
                 style: const TextStyle(fontSize: 12)),
           ),
@@ -1019,7 +1044,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
               hata ??
                   'Yerel modelleri çalıştırmak için llama.cpp motoru (llama-cpp-python) '
                       'bir kez kurulmalı. Bu bilgisayar için '
-                      '${onerilenCuda ? 'ekran kartı (NVIDIA CUDA)' : 'işlemci (CPU)'} sürümü '
+                      '${onerilenCuda ? (m['onerilen'] == 'vulkan' ? 'ekran kartı (Vulkan)' : 'ekran kartı (NVIDIA CUDA)') : metalVar(m) ? 'Apple ekran kartı (Metal)' : 'işlemci (CPU)'} sürümü '
                       'seçildi (~${m['indirme_mb']} MB). Modeller şimdiden indirilebilir.',
               style: const TextStyle(fontSize: 12),
             ),
@@ -1042,7 +1067,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         Expanded(
           child: Text(
             'Motor kurulu: llama-cpp-python ${bilgi['surum'] ?? ''} '
-            '(${etkin == 'cuda' ? 'ekran kartı / CUDA' : 'işlemci / CPU'}) · sunucu '
+            '(${motorTuruAdi(etkin, m)}) · sunucu '
             '${sunucu['calisiyor'] == true ? 'çalışıyor' : 'ilk istekte başlar'}. '
             'Modeller internetsiz çalışır.',
             style: const TextStyle(fontSize: 11.5),
@@ -1050,13 +1075,13 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         ),
         // Ekran kartı sürümü daha önce bu bilgisayarda çalışmadıysa büyük
         // düğme yeniden gösterilmez (eskiden her basışta aynı döngü yaşanıyordu).
-        if (onerilenCuda && etkin != 'cuda' && cudaHata == null)
+        if (onerilenCuda && etkin != m['onerilen'] && cudaHata == null)
           TextButton(
               onPressed: () => _motorKur(tur: 'cuda'),
               child: const Text('Ekran kartı sürümünü kur')),
         TextButton(onPressed: _motorKaldir, child: const Text('Kaldır')),
       ]),
-      if (onerilenCuda && etkin != 'cuda' && cudaHata != null)
+      if (onerilenCuda && etkin != m['onerilen'] && cudaHata != null)
         Padding(
           padding: const EdgeInsets.only(left: 21),
           child: Wrap(
@@ -1145,7 +1170,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
             onPressed: () => _modelDiziniAyarla(onerilenDizin),
             icon: const Icon(Icons.drive_file_move_outline, size: 16),
-            label: Text('${onerilenDizin.substring(0, 1)}: sürücüsüne geç'),
+            label: Text(onerilenSurucuyeGecMetni(onerilenDizin)),
           ),
       ]),
       for (final s in suruculer)
@@ -1155,7 +1180,9 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
             SizedBox(
               width: 92,
               child: Text(
-                  '${s['harf']}: ${s['tur'] == '?' ? '' : s['tur']}${s['model_surucusu'] == true ? ' ◀' : ''}',
+                  '${surucuEtiketi('${s['harf']}', s['kok']?.toString())} '
+                  '${s['tur'] == '?' ? '' : s['tur']}${s['model_surucusu'] == true ? ' ◀' : ''}',
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: s['model_surucusu'] == true ? FontWeight.w700 : null)),
@@ -1177,7 +1204,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
               child: Text(
                 '${_gb(s['bos_gb'] as num?)} boş / ${_gb(s['toplam_gb'] as num?)} · '
                 'modeller için kullanılabilir: ${_gb(s['kullanilabilir_gb'] as num?)} '
-                '(${_gb(s['ayrilan_gb'] as num?)} ${s['sistem'] == true ? 'Windows' : 'güvenlik'} payı)',
+                '(${_gb(s['ayrilan_gb'] as num?)} ${s['sistem'] == true ? sistemPayiAdi() : 'güvenlik'} payı)',
                 style: const TextStyle(fontSize: 11),
               ),
             ),
@@ -1379,14 +1406,14 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
       bolum('Hafif modeller — basit görevler',
           'Otomatik tamamlama, kısa açıklamalar. Hızlı, az bellek ve disk ister.'),
       if (hafif.isEmpty)
-        const Text('Belleğe ve diske sığan hafif model bulunamadı; Depolama bölümünden '
-            'başka bir sürücü seç.'),
+        Text('Belleğe ve diske sığan hafif model bulunamadı; Depolama bölümünden '
+            '${baskaSurucuOnerisi()}.'),
       for (final m in hafif) _modelKarti(theme, m, etiket: 'Hafif'),
       bolum('Sohbet modelleri — AI Paneli',
           'Soru-cevap, kod yazma, hata açıklama. Bu bilgisayara sığan en güçlüler.'),
       if (buyuk.isEmpty)
-        const Text('Belleğe ve diske sığan sohbet modeli bulunamadı; Depolama bölümünden '
-            'başka bir sürücü seç.'),
+        Text('Belleğe ve diske sığan sohbet modeli bulunamadı; Depolama bölümünden '
+            '${baskaSurucuOnerisi()}.'),
       for (final m in buyuk) _modelKarti(theme, m, etiket: 'Sohbet'),
     ]);
   }
@@ -2236,7 +2263,8 @@ Future<void> turkodKabuguAc(BuildContext context) async {
     try {
       final r = await context.read<BackendService>().call('kabuk_penceresi');
       if (r['ok'] != true && context.mounted) {
-        showAppSnackbar(context, 'Kabuk penceresi açılamadı.', kind: SnackKind.error);
+        showAppSnackbar(context, kabukPenceresiHataMetni(r['hata']),
+            kind: SnackKind.error);
       }
     } catch (e) {
       if (context.mounted) {

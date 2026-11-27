@@ -211,7 +211,8 @@ void Webview::SetWindowVisible(bool visible) {
   webview_controller_->put_IsVisible(visible ? TRUE : FALSE);
 }
 
-void Webview::SetClipRects(const std::vector<RECT>& rects) {
+void Webview::SetClipRects(const std::vector<RECT>& rects,
+                           const std::vector<int>& radii) {
   if (!IsValid() || !windowed_) {
     return;
   }
@@ -219,14 +220,24 @@ void Webview::SetClipRects(const std::vector<RECT>& rects) {
     ::SetWindowRgn(hwnd_, nullptr, TRUE);
     return;
   }
-  HRGN bolge = ::CreateRectRgn(0, 0, (std::max)(window_width_, 1),
-                               (std::max)(window_height_, 1));
-  for (const auto& r : rects) {
+  // Önce bütün delikler birleştirilir, sonra pencereden bir kez çıkarılır
+  // (Kodi'nin silüeti çok sayıda küçük parçadan oluşur).
+  HRGN delikler = ::CreateRectRgn(0, 0, 0, 0);
+  for (size_t i = 0; i < rects.size(); i++) {
+    const auto& r = rects[i];
+    const int yaricap = i < radii.size() ? radii[i] : 14;
     // Kodi'nin balonu yuvarlak köşeli: kesik de öyle.
-    HRGN delik = ::CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, 28, 28);
-    ::CombineRgn(bolge, bolge, delik, RGN_DIFF);
+    HRGN delik = yaricap > 0
+                     ? ::CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1,
+                                            yaricap * 2, yaricap * 2)
+                     : ::CreateRectRgn(r.left, r.top, r.right, r.bottom);
+    ::CombineRgn(delikler, delikler, delik, RGN_OR);
     ::DeleteObject(delik);
   }
+  HRGN bolge = ::CreateRectRgn(0, 0, (std::max)(window_width_, 1),
+                               (std::max)(window_height_, 1));
+  ::CombineRgn(bolge, bolge, delikler, RGN_DIFF);
+  ::DeleteObject(delikler);
   // Bölge artık pencerenindir (sistem siler).
   ::SetWindowRgn(hwnd_, bolge, TRUE);
 }

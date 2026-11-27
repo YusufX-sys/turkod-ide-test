@@ -283,8 +283,8 @@ SAYFALAR = [
         ], [2.0, 2.6]),
         ("kodi", "Tıklarken mor imlecimi sayfada görürsün. Şifre kutularına asla yazmam; satın alma, ödeme ya da "
                  "silme gibi bir düğmeye basmadan önce de sana sorarım."),
-        ("kutu", "ipucu", "Sayfadayken de `Ctrl+Shift+P`, `F1` gibi TürKod kısayolları çalışır. Sekmeyi "
-                          "kapatınca tarayıcı tamamen kapanır."),
+        ("kutu", "ipucu", "Sayfadayken de `Ctrl+Shift+P`, `F1` gibi TürKod kısayolları çalışır. Linux'ta "
+                          "bu sekme yoktur: sayfalar bilgisayarının kendi tarayıcısında açılır."),
     ]),
     # ------------------------------------------------------------------ 2f8
     ("Kurulum rehberi", "Yapay zekâ yoksa Kodi seni adım adım götürür.", [
@@ -314,8 +314,9 @@ SAYFALAR = [
         ]),
         ("kutu", "bilgi", "**Büyükler için:** Kodi'nin kulağı Ayarlar'daki bir **Groq** (ücretsiz) ya da **OpenAI** "
                           "anahtarıyla çalışır: söylenen ses, yazıya çevrilmek için o sağlayıcıya gönderilir. Anahtar "
-                          "yoksa Kodi bunu söyler ve Ayarları aç düğmesini gösterir. Kodi'nin sesi Windows'un Türkçe "
-                          "konuşma sesidir, internet istemez. Mikrofonun Windows'ta açık olmalı."),
+                          "yoksa Kodi bunu söyler ve Ayarları aç düğmesini gösterir. Kodi'nin sesi bilgisayarın "
+                          "kendi Türkçe konuşma sesidir, internet istemez. Mikrofonun açık olmalı; Linux'ta bir "
+                          "ses kayıt programı, Mac'te SoX kurulu olmalı."),
     ]),
     # ------------------------------------------------------------------ 2h
     ("Kodi masaüstünde", "TürKod'un dışına da çıkabilirim!", [
@@ -334,12 +335,55 @@ SAYFALAR = [
         ]),
         ("kodi", "Bir oyun yazarken ya da internette bir şey okurken beni yanına al. Takıldığın an buradayım!"),
     ]),
+    # ------------------------------------------------------------------ 2i
+    ("Kodi'nin yüzleri ve hareketleri", "Sevinirim, şaşırırım, utanırım, dans ederim!", [
+        ("paragraf", "Ben de senin gibi hissederim! Her cevabımda o ana uyan **bir yüz**, **bir duruş** ve "
+                     "bazen **bir hareket** seçerim. Kodun çalışınca kollarımı havaya kaldırıp zıplarım, "
+                     "etrafa konfeti saçılır. Bir hata çıkınca omuz silkerim, ama hemen birlikte çözeriz."),
+        ("resim", "kodi_halleri.png", "Kodi'nin hâllerinden bazıları", 170),
+        ("tablo", ["Neler var?", "Örnekler"], [
+            ["Yüzler", "Yıldız gözlü, kalp gözlü, şaşkın, kahkaha atan, göz kırpan, utangaç, meraklı, "
+                       "endişeli, gururlu, uykulu ..."],
+            ["Duruşlar", "Kollar havada, başparmak yukarı, sağı ya da solu gösterme, omuz silkme, alkış, "
+                         "eller belde, elleriyle yüzünü kapama ..."],
+            ["Hareketler", "Zıplama, dans, kendi çevresinde dönme, titreme, eğilip selam verme, sallanma."],
+            ["Çevremde", "Konfeti, kalpler, yıldızlar, soru ve ünlem işareti, müzik notaları, Zzz."],
+        ], [1.2, 3.4]),
+        ("paragraf", "Konuşurken seçtiğim yüzle konuşurum; cevabım bitince birkaç saniye o hâlde kalır, "
+                     "sonra her zamanki gülümsememe dönerim."),
+        ("kutu", "gorev", "Bana bir şaka anlat, sonra \"Teşekkürler Kodi!\" de. İki cevabımda hangi yüzleri yaptım?"),
+        ("kutu", "bilgi", "**Büyükler için:** Yüzü, duruşu ve hareketi Kodi'nin yapay zekâsı her cevapta "
+                          "kendisi seçer; bu seçim programda hiçbir şeyi değiştirmez."),
+    ]),
+    # ------------------------------------------------------------------ 2j
+    ("Kodi hiç boş durmaz", "Gelirken, giderken, beklerken bile kıpır kıpırım!", [
+        ("paragraf", "Bir yüzden ötekine bir anda geçmem: kollarım yavaşça kalkar ya da iner, yüzüm "
+                     "usulca değişir, dansa yavaş yavaş başlarım. Düşünmeye başlarken pencerenin ortasına "
+                     "doğru kendi çevremde dönerim."),
+        ("tablo", ["Ne zaman?", "Ben ne yaparım?"], [
+            ["Beni çağırınca", "Kayarak gelirim, zıplayıp yere yaylanarak inerim, el sallarım."],
+            ["Beni gönderince", "Göz kırpıp el sallarım, sonra kayarak giderim."],
+            ["Beni sürüklerken", "Havada şaşırırım, kollarımı açar, ayaklarımı sallarım."],
+            ["Beni bırakınca", "Yere yaylanarak inerim. Hop!"],
+            ["Masaüstüne çıkarken", "Heyecanla zıplar, dönerek küçülür ve ışınlanırım; masaüstünde pıt "
+                                    "diye belirir, kollarımı havaya kaldırırım."],
+            ["Boşta dururken", "Arada bir etrafa bakınırım, koduna göz atarım, gerinirim, ıslık çalarım, "
+                               "dans eder ya da zıplarım."],
+            ["Uzun süre sessizlik olunca", "Uyuklarım, başımın üstünde \"Zzz\" belirir. Bir şey sorunca "
+                                           "hemen uyanırım!"],
+        ], [1.5, 3.1]),
+        ("kodi", "Beni bir süre izle: boşken neler yaptığımı say bakalım. Kaç farklı hareket buldun?"),
+        ("kutu", "bilgi", "**Büyükler için:** Kodi boştayken birkaç kez kıpırdandıktan sonra dinlenir; "
+                          "böylece bilgisayarı boş yere yormaz."),
+    ]),
     # ------------------------------------------------------------------ 3
     ("Dosya menüsü", "Kodlarını açmak, saklamak, kapatmak.", [
         ("paragraf", "Menüler, komutların dizildiği raflar gibidir. Bir menünün adına tıklarsan raf açılır. "
                      "Her komutun sağında gri renkle **kısayolu** yazar: menüyü hiç açmadan aynı işi yapan tuş "
                      "birleşimi. Menüler soldan sağa şöyle: Dosya, Düzenle, Görünüm, Çalıştır, Araçlar, Öğren, "
-                     "Yardım, Güncelleştirmeler."),
+                     "Yardım, Güncelleştirmeler. Mac'te kısayollarda `Ctrl` yerine `Cmd` (⌘) tuşuna basılır. "
+                     "Üç istisnası var: Yinele `Cmd+Shift+Z`, Bul / Değiştir `Cmd+Option+F`, hayalet önerinin "
+                     "bir kelimesini kabul etmek `Option+→`."),
         ("tablo", ["Komut", "Kısayol", "Ne yapar?"], [
             ["Yeni Sekme", "`Ctrl+T`", "\"Adsız-1.trpy\" adında boş bir sayfa açar."],
             ["Dosya Aç", "`Ctrl+O`", "Bilgisayarından bir dosya seçip açar."],
@@ -413,7 +457,8 @@ SAYFALAR = [
             ["Kesme Noktası Aç/Kapat", "`F9`", "Satıra kırmızı bir durak koyar ya da kaldırır."],
             ["Koşullu Kesme Noktası…", "`Shift+F9`", "Yalnızca bir şart doğruysa duran durak."],
             ["Çalıştırma Argümanları…", "", "Programa başlarken vereceğin bilgileri yazarsın."],
-            ["EXE'ye Dönüştür…", "", "Programını her bilgisayarda çalışan bir EXE dosyası yapar."],
+            ["EXE'ye Dönüştür…", "", "Programını her bilgisayarda çalışan bir EXE dosyası yapar "
+                                     "(Linux ve Mac'te adı Uygulamaya Dönüştür…)."],
             ["EXE'nin Kaynak Kodunu Aç…", "", "Bir TürKod EXE'sinin kodunu yeni sekmede açar."],
             ["Tüm Kesme Noktalarını Kaldır", "", "Sekmedeki bütün durakları siler."],
             ["Hata Ayıklamayı Başlat / Devam", "`F5`", "Adım adım izlemeyi başlatır; duraktaysa devam eder."],
@@ -449,6 +494,8 @@ SAYFALAR = [
         ("maddeler", [
             "**TürKod ile Kodlama Macerası (Kitap)**: Şu an okuduğun bu kitabı yeni bir sekmede açar. Merhaba!",
             "**Dokümantasyon Sitesi**: yusufx-sys.github.io/turkod-site adresini açar.",
+            "**Kütüphane Rehberi**: TürKod'un tanıdığı bütün kütüphaneleri tek tek anlatır (bkz. Kütüphane "
+            "Rehberi sayfası).",
         ]),
         ("baslik", "Yardım ve Güncelleştirmeler"),
         ("maddeler", [
@@ -502,7 +549,8 @@ SAYFALAR = [
                      "Adlandır, Sil, Yenile. Yeni dosya için TürKod \"yeni.trpy\" adını önerir, sen istediğin adı "
                      "verirsin. Açık bir dosyanın adını değiştirirsen sekmesinin adı da değişir."),
         ("resim", "gezgin_sag_tik.png", "Gezgin'de bir dosyaya sağ tıklayınca açılan menü", 250),
-        ("kutu", "bilgi", "Gezgin'den sildiğin dosyalar kaybolmaz, **Geri Dönüşüm Kutusu**'na gider. Yanlışlıkla "
+        ("kutu", "bilgi", "Gezgin'den sildiğin dosyalar kaybolmaz, **Geri Dönüşüm Kutusu**'na (Mac'te Çöp "
+                          "Kutusu'na, Linux'ta Çöp'e) gider. Yanlışlıkla "
                           "sildiysen oradan geri alabilirsin. USB bellek gibi kutusu olmayan yerlerde TürKod "
                           "silmeden önce sana sorar. Adı noktayla başlayan gizli dosyalar gösterilmez; çok "
                           "kalabalık klasörlerde ilk 300 dosya listelenir."),
@@ -773,7 +821,8 @@ SAYFALAR = [
                      "Türkçe komutlarla kurabilirsin. Kurulanlar `%LOCALAPPDATA%\\TurKod\\pip_packages` klasörüne "
                      "gider."),
         ("tablo", ["Komut", "Ne yapar?"], [
-            ["`pip yükle paket`", "Kütüphane kurar."],
+            ["`pip yükle paket`", "Kütüphane kurar. Kütüphanenin Türkçe adını yazabilirsin: "
+                                  "`pip yükle satranç`, `pip yükle veri_tabloları`."],
             ["`pip güncelle paket` / `pip sil paket`", "Günceller / kaldırır."],
             ["`pip listele` / `pip eskiler`", "Kurulu olanları / eskimiş olanları listeler."],
             ["`pip bilgi paket` / `pip ara kelime`", "Bilgi gösterir / arar."],
@@ -781,6 +830,78 @@ SAYFALAR = [
                                                           "yardımı çıkar."],
         ], [1.9, 2.5]),
         ("kutu", "dikkat", "Kütüphane kurarken internetten dosya indirilir. Bunu mutlaka bir büyüğünle birlikte yap."),
+    ]),
+    # ------------------------------------------------------------------ 15c
+    ("Kütüphane Rehberi", "Hangi oyuncak kutusu ne işe yarar?", [
+        ("paragraf", "TürKod 150'den fazla kütüphaneyi tanır ve hepsinin Türkçe bir adı vardır: oyun için "
+                     "`py_oyun`, satranç için `satranç`, tablolar için `veri_tabloları`, yapay zekâ için "
+                     "`derin_öğrenme` ... Hepsini bir kütüphanenin rafları gibi gezmek için **Öğren → "
+                     "Kütüphane Rehberi**'ni aç."),
+        ("maddeler", [
+            "**Solda** kütüphaneler konularına göre sıralanır (Oyun, Arayüz, Yapay zekâ ...). Üstteki kutuya "
+            "\"satranç\" ya da \"tablo\" yazarak arayabilirsin.",
+            "**Sağda** seçtiğin kütüphanenin uzun açıklaması, Türkçe adıyla nasıl kurulacağı ve küçük bir örnek program durur. "
+            "Örneği TürKod ya da Python hâliyle görebilir, **Editörde aç** ile hemen deneyebilirsin.",
+            "**Bütün Türkçe karşılıklar** listesi, kütüphanedeki her adın Türkçesini gösterir. Bir adı "
+            "unuttuysan buradan ara: `Board` mu yazacaktın, `Tahta` mı?",
+        ]),
+        ("resim", "kutuphane_rehberi.png", "Kütüphane Rehberi'nde satranç kütüphanesi", 150),
+        ("kod", "satranc.trpy", [
+            'içe_aktar satranç',
+            'tahta = satranç.Tahta()',
+            'için hamle içinde ["e4", "e5", "Qh5", "Nc6", "Bc4", "Nf6", "Qxf7"]:',
+            '    tahta.san_oyna(hamle)',
+            'yazdır(tahta)',
+            'yazdır("Şah mat mı?", tahta.şah_mat_mı())',
+        ]),
+        ("kodi", "Bu programın sonunda \"Şah mat mı? Doğru\" yazar: dört hamlede çoban matı! Önce "
+                 "terminalde `pip yükle satranç` yazıp kütüphaneyi kurmayı unutma."),
+        ("kutu", "gorev", "Kütüphane Rehberi'nde pygame'i bul ve örneğini Editörde aç. Çalıştır, ne oldu?"),
+    ]),
+    # ------------------------------------------------------------------ 15d
+    ("Kolay Oyun: Türkçe oyun yap", "Pygame Zero ile birkaç satırda hareketli oyun.", [
+        ("paragraf", "**Kolay Oyun** (Pygame Zero), çocuklar için yapılmış bir oyun kütüphanesidir. Pencereyi "
+                     "açmak, her saniye onlarca kez ekranı yeniden çizmek gibi zor işleri o yapar; sen yalnızca "
+                     "ne çizileceğini ve neyin değişeceğini yazarsın. Önce terminalde `pip yükle kolay_oyun` yaz."),
+        ("kod", "top_oyunu.trpy", [
+            'içe_aktar kolay_oyun',
+            '',
+            'GENİŞLİK = 400',
+            'YÜKSEKLİK = 300',
+            'x = 200',
+            '',
+            'fonksiyon çiz():',
+            '    ekran.temizle()',
+            '    ekran.çiz.dolu_daire((x, 150), 30, "turuncu")',
+            '',
+            'fonksiyon güncelle():',
+            '    küresel x',
+            '    eğer klavye.sol_ok:',
+            '        x = x - 4',
+            '    eğer klavye.sağ_ok:',
+            '        x = x + 4',
+            '',
+            'kolay_oyun.oyunu_başlat()',
+        ]),
+        ("kodi", "Ok tuşlarıyla turuncu topu sağa sola kaydır! `çiz` ve `güncelle` adları özeldir: Kolay "
+                 "Oyun onları kendisi çağırır, sen hiç çağırmazsın."),
+    ]),
+    ("Kolay Oyun komutları", "Ekran, klavye, ses ve zaman Türkçe.", [
+        ("tablo", ["Yazdığın", "Ne işe yarar?"], [
+            ["`fonksiyon çiz():`", "Ekran her yenilendiğinde çalışır: oyunun resmini burada çizersin."],
+            ["`fonksiyon güncelle():`", "Saniyede 60 kez çalışır: topu, karakterleri burada hareket ettirirsin."],
+            ["`GENİŞLİK`, `YÜKSEKLİK`, `BAŞLIK`", "Pencerenin boyu ve adı."],
+            ["`klavye.sol_ok`, `tuşlar.BOŞLUK`", "Tuşa basılıyor mu? / Hangi tuşa basıldı?"],
+            ["`fonksiyon tuşa_basılınca(tuş):`", "Bir tuşa basıldığı an bir kez çalışır."],
+            ["`fonksiyon fare_basılınca(konum):`", "Fareye tıklandığında çalışır; `konum` tıklanan yerdir."],
+            ["`Aktör(\"uzayli\")`", "images klasöründeki resimden bir oyun karakteri yapar."],
+            ["`sesler.patlama.çal()`", "sounds klasöründeki patlama sesini çalar."],
+            ["`oyun_saati.aralıklı_zamanla(f, 2)`", "f işini her 2 saniyede bir yapar."],
+        ], [1.9, 2.7]),
+        ("kutu", "ipucu", "Kolay Oyun'un bütün Türkçe komutları Öğren → Kütüphane Rehberi'nde, Kolay Oyun "
+                          "kartında. Renkleri Türkçe yazabilirsin: \"turuncu\", \"lacivert\", \"açık_yeşil\"."),
+        ("kutu", "gorev", "Topun yukarı aşağı da gitmesini sağla: `y` değişkeni ekle, `klavye.yukarı_ok` ve "
+                          "`klavye.aşağı_ok` ile değiştir."),
     ]),
     # ------------------------------------------------------------------ 16
     ("Çıktı ve hata mesajları", "TürKod sana hep Türkçe konuşur.", [
@@ -1048,8 +1169,8 @@ SAYFALAR = [
                      "olmadan çalışırlar ve kodun bilgisayarından hiç çıkmaz."),
         ("resim", "yerel_ai.png", "Yerel AI Modelleri: bilgisayara uygun hafif modeller öneriliyor", 150),
         ("tablo", ["Bölüm", "Ne yapar?"], [
-            ["Donanım satırı", "Bilgisayarının belleğini, işlemcisini ve ekran kartını gösterir. NVIDIA kartta "
-                               "işler hızlanır (CUDA)."],
+            ["Donanım satırı", "Bilgisayarının belleğini, işlemcisini ve ekran kartını gösterir. NVIDIA "
+                               "(CUDA), AMD (Vulkan) kartlarda ve Apple Silicon Mac'lerde (Metal) işler hızlanır."],
             ["Motor", "Modelleri çalıştıran parçayı kurar (**Motoru kur**; yaklaşık 8 MB). **Kaldır** ile silinir."],
             ["Depolama", "Modellerin duracağı klasörü seçersin; her sürücünün boş yeri gösterilir."],
             ["Önerilen", "Bilgisayarına uygun modeller. **İndir** ile indirilir; yarıda kalan indirme kaldığı "
@@ -1205,7 +1326,7 @@ SAYFALAR = [
                           "kontrol et."),
     ]),
     # ------------------------------------------------------------------ 30
-    ("Programı Windows'tan kullanmak", "IDE'yi açmadan da TürKod çalışır.", [
+    ("Çift tıkla, çalışsın", "IDE'yi açmadan da TürKod çalışır.", [
         ("paragraf", "Ayarlar'da dosya ilişkilendirmesi açıksa bir .trpy dosyasına **çift tıkladığında** kodun "
                      "koyu renkli küçük bir TürKod penceresinde çalışır. Hata satırları kırmızı görünür."),
         ("tablo", ["Tuş", "Pencerede ne yapar?"], [
@@ -1225,7 +1346,8 @@ SAYFALAR = [
         ("paragraf", "Bir oyun yaptın ve arkadaşına göstermek istiyorsun ama onun bilgisayarında TürKod yok. "
                      "Sorun değil! **Çalıştır → EXE'ye Dönüştür…** programını bir **EXE** dosyasına çevirir. "
                      "EXE, Windows'un \"çift tıkla, çalışsın\" dediği dosyadır; içine programın ve onu çalıştıracak "
-                     "her şey konur, tıpkı bir hediye paketi gibi."),
+                     "her şey konur, tıpkı bir hediye paketi gibi. Linux ve Mac'te menünün adı **Uygulamaya "
+                     "Dönüştür…**: Linux'ta tek bir program dosyası, Mac'te bir **.app** uygulaması yapar."),
         ("resim", "exe_paneli.png", "EXE'ye Dönüştür paneli: ad, kaydedileceği klasör ve programın açılış biçimi",
          350),
         ("maddeler", [

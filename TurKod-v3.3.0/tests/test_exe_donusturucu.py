@@ -358,6 +358,7 @@ class _DerlemesizExeYap:
 
 
 class DerlemeOncesiDenetimTestleri(_DerlemesizExeYap, unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "aygıt adları (CON ...) yalnızca Windows'ta yasak")
     def test_ayrilmis_windows_adi_degistirilir(self):
         cikti = self.calistir('yazdır(1)\n', ad="con")
         self.assertIn("con_program.exe", "\n".join(cikti))
@@ -384,10 +385,13 @@ class DerlemeOncesiDenetimTestleri(_DerlemesizExeYap, unittest.TestCase):
             return asil(yol)
         exe._yazilabilir_mi = yakala
         self.addCleanup(setattr, exe, "_yazilabilir_mi", asil)
+        # Windows'ta ana.exe, Linux'ta ana, macOS'ta ana.app/Contents/MacOS/ana.
+        def beklenen(klasor):
+            return exe.cikti_yollari(klasor, "ana", "turkod", False)[1]
         self.calistir("yazdır(1)\n", kayit_yeri="Oyunlar")
-        self.assertEqual(yakalanan["yol"], os.path.join(self.klasor, "Oyunlar", "ana.exe"))
+        self.assertEqual(yakalanan["yol"], beklenen(os.path.join(self.klasor, "Oyunlar")))
         self.calistir("yazdır(1)\n", kayit_yeri="")
-        self.assertEqual(yakalanan["yol"], os.path.join(self.klasor, "ana.exe"))
+        self.assertEqual(yakalanan["yol"], beklenen(self.klasor))
 
     def test_terminalsiz_girdi_uyarisi(self):
         kod = 'ad = girdi_al("Ad? ")\n'
@@ -398,8 +402,16 @@ class DerlemeOncesiDenetimTestleri(_DerlemesizExeYap, unittest.TestCase):
         self.dosya("a.txt")
         self.assertIn("[HATA] Simge dosyası bulunamadı: yok.ico",
                       self.calistir("yazdır(1)\n", simge="yok.ico"))
-        self.assertIn("[HATA] Simge bir .ico dosyası olmalı: a.txt",
-                      self.calistir("yazdır(1)\n", simge="a.txt"))
+        sistem = exe.hedef_sistem()
+        if sistem == "windows":
+            self.assertIn("[HATA] Simge bir .ico dosyası olmalı: a.txt",
+                          self.calistir("yazdır(1)\n", simge="a.txt"))
+        elif sistem == "macos":
+            self.assertIn("[HATA] Simge bir .icns, .png ya da .ico dosyası olmalı: a.txt",
+                          self.calistir("yazdır(1)\n", simge="a.txt"))
+        else:   # Linux'ta program dosyasının simgesi olmaz: uyarılır, kullanılmaz
+            self.assertTrue(any("simge kullanılmadı" in s
+                                for s in self.calistir("yazdır(1)\n", simge="a.txt")))
         self.assertIn("[HATA] Eklenecek dosya bulunamadı: yok.png",
                       self.calistir("yazdır(1)\n", ekler=["yok.png"]))
         self.assertTrue(self.calistir("yazdır(1)\n", kayit_yeri=self.dosya("a.txt"))[0]
@@ -534,7 +546,9 @@ def _ileti_kutusunu_oku_ve_kapat(baslik, sure=90):
     return None
 
 
-@unittest.skipUnless(os.environ.get("TURKOD_EXE_TESTI") == "1" and sys.platform == "win32",
+# Her sistemde kendi biçimi derlenir: Windows .exe, Linux program dosyası,
+# macOS .app (konsol kipinde tek dosya).
+@unittest.skipUnless(os.environ.get("TURKOD_EXE_TESTI") == "1",
                      "gerçek EXE derlemesi uzun sürer (TURKOD_EXE_TESTI=1)")
 class GercekExeTesti(unittest.TestCase):
     def setUp(self):
@@ -578,6 +592,7 @@ class GercekExeTesti(unittest.TestCase):
         sonraki = {a for a in os.listdir(tempfile.gettempdir()) if a.startswith(exe._GECICI_ONEKI)}
         self.assertEqual(sonraki - onceki, set())
 
+    @unittest.skipUnless(sys.platform == "win32", "ileti kutusu Windows API'siyle okunur")
     def test_terminalsiz_girdi_turkce_ileti_kutusu(self):
         ana = self.dosya("soru.trpy", 'ad = girdi_al("Adın? ")\nyazdır(ad)\n')
         yol, cikti = self.yap(ana, pencere="yok")
@@ -589,6 +604,7 @@ class GercekExeTesti(unittest.TestCase):
         self.assertIn("Terminalsiz EXE'de girdi_al kullanılamaz", metin)
         self.assertNotIn("lost sys.stdin", metin)
 
+    @unittest.skipUnless(sys.platform == "win32", "bozuk .ico ile derlemeyi düşürmek Windows'a özgü")
     def test_basarisiz_derleme_eski_exeyi_bozmaz(self):
         ana = self.dosya("oyun.trpy", 'yazdır("yeni")\n')
         eski = os.path.join(self.klasor, "oyun.exe")
@@ -611,7 +627,9 @@ class GercekExeTesti(unittest.TestCase):
         self.dosya("say.trpy", 'yazdır("iki")\n')
         yol2, cikti = self.yap(ana, klasorlu=True, kaynak=True)
         self.assertEqual(yol, yol2, cikti)
-        self.assertEqual(sorted(os.listdir(self.klasor)), ["say", "say.trpy"])
+        # Windows/Linux'ta "say" klasörü, macOS'ta "say.app" paketi.
+        koyulan = os.path.basename(exe.cikti_yollari(self.klasor, "say", "turkod", True)[0])
+        self.assertEqual(sorted(os.listdir(self.klasor)), [koyulan, "say.trpy"])
         r = subprocess.run([yol2], capture_output=True, timeout=120, stdin=subprocess.DEVNULL,
                            env=dict(os.environ, TURKOD_EXE_COCUK="1"))
         self.assertIn("iki", r.stdout.decode("utf-8"))

@@ -1,4 +1,5 @@
 """TurKod <-> Python cevirici fonksiyonlar."""
+import ast
 import builtins
 import keyword
 import re
@@ -7,7 +8,7 @@ import warnings
 
 from .dictionary import (KORUNMAYAN_KELIMELER, SOZLUK, TERS_SOZLUK, kullanici_tanimlari,
                          yalniz_oznitelik_adlari, _parantez_derinligi_haritasi)
-from .deger_sozlugu import ters_degerleri_cevir
+from .deger_sozlugu import ileri_degerleri_cevir, ters_degerleri_cevir
 from .modul_sozlugu import MODUL_ADI_YENILEME, MODUL_ESKI_ADLARI, MODUL_METOTLARI_EK
 from .tokenizer import tokenize, TokenTuru
 
@@ -307,6 +308,113 @@ MODUL_CEVIRILERI = {
     "komut_satırı_kabuğu": "shlex",
     "dosya_karşılaştırma": "filecmp",
     "fark_bulucu": "difflib",
+    # Satranç ve yerel dil modeli kütüphaneleri. Kısa (Python) adı ÖNCE gelir.
+    "chess": "chess",
+    "satranç": "chess",
+    "llama_cpp": "llama_cpp",
+    "llama_kütüphanesi": "llama_cpp",
+    # Kütüphanelerin Türkçe adları (Kütüphane Rehberi ve "pip yükle <ad>" bunları
+    # kullanır). Python adlarından SONRA gelir: ters çeviri (Python -> TürKod)
+    # eskisi gibi kısa/alışılmış adı seçer.
+    "sayısal_diziler": "numpy",
+    "veri_tabloları": "pandas",
+    "hızlı_veri_tabloları": "polars",
+    "sütunlu_veri": "pyarrow",
+    "yerel_dil_modeli": "llama_cpp",
+    "yapay_zeka_istemcisi": "openai",
+    "derin_öğrenme": "torch",
+    "tensör_akışı": "tensorflow",
+    "makine_öğrenme_araçları": "sklearn",
+    "doğal_dil_işleme": "spacy",
+    "dönüştürücü_modeller": "transformers",
+    "grafik_çizici": "matplotlib.pyplot",
+    "salon_oyunları": "arcade",
+    "çoklu_ortam": "pyglet",
+    "üç_boyutlu_oyun": "ursina",
+    "modern_pencereler": "customtkinter",
+    "dokunmatik_arayüz": "kivy",
+    "pencereli_arayüz": "tkinter",
+    "sayfa_ayrıştırıcı": "bs4",
+    "bulut_istemcisi": "boto3",
+    "web_sitesi_çatısı": "django",
+    "web_api_çatısı": "fastapi",
+    "web_çatısı": "flask",
+    "web_istemcisi": "httpx",
+    "bellek_veritabanı": "redis",
+    "web_istekleri": "requests",
+    "veri_uygulaması": "streamlit",
+    "eşzamansız_web": "aiohttp",
+    "pdf_belgeleri": "pymupdf",
+    "test_kapsamı": "coverage",
+    "test_çatısı": "pytest",
+    "konteyner_yönetimi": "docker",
+    "fare_klavye_otomasyonu": "pyautogui",
+    "veritabanı_araçları": "sqlalchemy",
+    "veri_doğrulama": "pydantic",
+    "platform_bilgisi": "platform",
+    # Çocuklar için eklenen kütüphaneler (2026-11): Python adı ve Türkçe adı.
+    "pgzrun": "pgzrun",
+    "kolay_oyun": "pgzrun",
+    "pgzero": "pgzero",
+    "kolay_oyun_paketi": "pgzero",
+    "pyray": "pyray",
+    "hızlı_grafik": "pyray",
+    "pymunk": "pymunk",
+    "fizik_motoru": "pymunk",
+    "pyttsx3": "pyttsx3",
+    "konuşturucu": "pyttsx3",
+    "gtts": "gtts",
+    "çevrimiçi_seslendirme": "gtts",
+    "qrcode": "qrcode",
+    "karekod": "qrcode",
+    "flet": "flet",
+    "modern_uygulama": "flet",
+    "dearpygui.dearpygui": "dearpygui.dearpygui",
+    "hızlı_arayüz": "dearpygui.dearpygui",
+    "rich": "rich",
+    "zengin_yazı": "rich",
+    "colorama": "colorama",
+    "renkli_terminal": "colorama",
+    "termcolor": "termcolor",
+    "terminal_renkleri": "termcolor",
+    "pyfiglet": "pyfiglet",
+    "dev_harfler": "pyfiglet",
+    "emoji": "emoji",
+    "emojiler": "emoji",
+    "tqdm": "tqdm",
+    "ilerleme_göstergesi": "tqdm",
+    "wikipediaapi": "wikipediaapi",
+    "vikipedi": "wikipediaapi",
+    "faker": "faker",
+    "sahte_veri": "faker",
+    "pyperclip": "pyperclip",
+    "pano_yönetimi": "pyperclip",
+    "schedule": "schedule",
+    "görev_zamanlayıcı": "schedule",
+    "psutil": "psutil",
+    "bilgisayar_bilgisi": "psutil",
+    "ollama": "ollama",
+    "yerel_yapay_zeka": "ollama",
+    "folium": "folium",
+    "etkileşimli_harita": "folium",
+    "serial": "serial",
+    "seri_port": "serial",
+    "pypdf": "pypdf",
+    "pdf_araçları": "pypdf",
+    "tinydb": "tinydb",
+    "küçük_veritabanı": "tinydb",
+    "gpiozero": "gpiozero",
+    "raspberry_pinleri": "gpiozero",
+    "pyfirmata2": "pyfirmata2",
+    "arduino": "pyfirmata2",
+    "urllib": "urllib",
+    "web_adresleri": "urllib",
+    "http": "http",
+    "hmap": "http",
+    "colorsys": "colorsys",
+    "renk_dönüşümleri": "colorsys",
+    "wave": "wave",
+    "dalga_sesi": "wave",
 }
 
 MODUL_METOTLARI = {
@@ -1188,6 +1296,17 @@ for _modul_tr, _ek in MODUL_METOTLARI_EK.items():
             if _yeni_ad in _ek:
                 _tablo.setdefault(_eski_ad, _ek[_yeni_ad])
 
+# Kendi tablosu olmayan TürKod modül adları (sonradan eklenen Türkçe adlar:
+# veri_tabloları -> pandas ...) aynı Python modülünün tablosunu paylaşır;
+# böylece "veri_tabloları.csv_oku" de çevrilir.
+for _t, _p in list(MODUL_CEVIRILERI.items()):
+    if _t in MODUL_METOTLARI:
+        continue
+    for _diger, _dp in MODUL_CEVIRILERI.items():
+        if _dp == _p and _diger in MODUL_METOTLARI:
+            MODUL_METOTLARI[_t] = MODUL_METOTLARI[_diger]
+            break
+
 # Önceden var olan maddelerin tam Türkçe adları: yeni ad eskisinin hemen
 # önüne eklenir (ters çeviride yeni ad seçilir), eski ad takma ad olarak
 # çalışmaya devam eder. Tablo nesnesi yerinde değiştirilir (paylaşılıyor).
@@ -2035,6 +2154,17 @@ for _nesne_tr, _ozellikler in PYMUPDF_NESNELERI.items():
 
 _ascii_alias_ekle(URSINA_NESNELERI, PYMUPDF_NESNELERI)
 
+def _modul_adlari_deseni(*py_moduller):
+    """Python modüllerine giden bütün TürKod adlarını (ve Python adlarını)
+    tanıyan desen: "pymupdf", "fitz", "pdf_belgeleri" ..."""
+    adlar = set(py_moduller) | {t for t, p in MODUL_CEVIRILERI.items() if p in py_moduller}
+    return re.compile(r"(?<![\w.])(?:" + "|".join(
+        re.escape(a) for a in sorted(adlar, key=len, reverse=True)) + r")(?!\w)")
+
+
+_URSINA_ADI = _modul_adlari_deseni("ursina")
+_PYMUPDF_ADI = _modul_adlari_deseni("pymupdf", "fitz")
+
 _PYMUPDF_NESNE_DESEN = re.compile(
     "|".join(
         rf"\b{re.escape(k)}\b"
@@ -2634,6 +2764,12 @@ def _import_turkce_adi(modul_py):
         tr = TERS_SOZLUK.get(modul_py, modul_py)
     if tr and (tr in MODUL_CEVIRILERI or ("." in tr and tr in MODUL_METOT_TABLO)):
         return tr
+    # Noktalı adıyla kendi tablosu olan modül ("matplotlib.pyplot"): ters
+    # tabloda üst modülün üyesi olarak geçmediğinden eskiden None dönüyor,
+    # "plt.draw" düz sözlükle "plt.çiz" olup ileri çeviride "plt.plot"a
+    # (modül tablosu) gidiyordu.
+    if "." in modul_py and modul_py in MODUL_CEVIRILERI and modul_py in MODUL_METOTLARI:
+        return modul_py
     return None
 
 
@@ -2873,8 +3009,16 @@ def python_kodu_turkceye_cevir(python_kodu):
     # (_regex_tabanli_ceviri) ayrı bir koddur ve ondan etkilenmez.
     # İlk yazılan kazanır: kanonik adlar (pencere.başlık) takma adlardan
     # (ursina_penceresi.başlık) ve ASCII yazımlardan (pencere.baslik) önce gelir.
+    # Tablolar yalnızca ilgili kütüphane içe aktarılmışsa uygulanır (ileri
+    # çeviride de öyle): eskiden koşulsuzdu; pypdf kodundaki "sayfa.rotation"
+    # pymupdf'in "sayfa.döndürme"sine dönüşüyor, geri çevrilince bozuluyordu.
     ters_nesne_tablo = {}
-    for tr, py in {**URSINA_NESNE_TABLO, **PYMUPDF_NESNE_TABLO}.items():
+    kaynaklar = {}
+    if re.search(r"^[ \t]*(?:import|from)[ \t]+ursina\b", gecici_kod, re.M):
+        kaynaklar.update(URSINA_NESNE_TABLO)
+    if re.search(r"^[ \t]*(?:import|from)[ \t]+(?:pymupdf|fitz)\b", gecici_kod, re.M):
+        kaynaklar.update(PYMUPDF_NESNE_TABLO)
+    for tr, py in kaynaklar.items():
         ters_nesne_tablo.setdefault(py, tr)
     if ters_nesne_tablo:
         ters_nesne_sirali = sorted(ters_nesne_tablo, key=len, reverse=True)
@@ -3101,12 +3245,14 @@ def _regex_tabanli_ceviri(turkce_kod, tanimlar=None):
     # halde tkinter kodundaki "pencere.başlık(...)" Ursina'nın "window.title"
     # nesnesine, "renk.kırmızı" gibi kullanıcı değişkenleri "color.red"e
     # çevrilip NameError veriyordu.
-    if re.search(r"\bursina", gecici_kod):
+    # Kütüphanenin Türkçe adıyla içe aktarılması da sayılır (üç_boyutlu_oyun,
+    # pdf_belgeleri); eskiden yalnızca "ursina" / "pymupdf" kelimesi aranıyordu.
+    if re.search(r"\bursina", gecici_kod) or _URSINA_ADI.search(gecici_kod):
         gecici_kod = _URSINA_NESNE_DESEN.sub(
             lambda m: URSINA_NESNE_TABLO[m.group(0)],
             gecici_kod
         )
-    if re.search(r"\b(?:pymupdf|fitz)\b", gecici_kod):
+    if _PYMUPDF_ADI.search(gecici_kod):
         gecici_kod = _PYMUPDF_NESNE_DESEN.sub(
             lambda m: PYMUPDF_NESNE_TABLO[m.group(0)],
             gecici_kod
@@ -3321,12 +3467,61 @@ def turkce_kodu_donustur(turkce_kod: str, yerel_moduller=None) -> str:
         sonuc = _CEVIRI_ONBELLEGI.get(anahtar)
     if sonuc is not None:
         return sonuc
-    sonuc = _turkce_kodu_donustur(turkce_kod, yerel_moduller)
+    # screen.fill("turuncu") -> screen.fill("orange"): çevrilen Python kodu
+    # TürKod dışında da çalışsın.
+    sonuc = ileri_degerleri_cevir(
+        _pgzero_parametreleri(_turkce_kodu_donustur(turkce_kod, yerel_moduller)))
     with _ceviri_kilidi:
         if len(_CEVIRI_ONBELLEGI) >= _CEVIRI_ONBELLEK_SINIRI:
             _CEVIRI_ONBELLEGI.pop(next(iter(_CEVIRI_ONBELLEGI)))
         _CEVIRI_ONBELLEGI[anahtar] = sonuc
     return sonuc
+
+
+# Pygame Zero (kolay_oyun) olay işlevlerinin parametreleri ADLARINA göre doldurulur
+# (pgzero/game.py prepare_handler: getattr(olay, parametre_adı)). Çocuğun yazdığı
+# "fonksiyon tuşa_basılınca(tuş):" parametresi "key" olmalı; yoksa tuşa basılınca
+# AttributeError. Türkçe parametre adları (ve işlev içindeki kullanımları) çevrilir.
+_PGZERO_OLAY_ISLEVLERI = {"on_key_down", "on_key_up", "on_mouse_down", "on_mouse_up",
+                          "on_mouse_move"}
+_PGZERO_PARAMETRELERI = {
+    "tuş": "key", "tus": "key",
+    "özel_tuş": "mod", "ozel_tus": "mod",
+    "karakter": "unicode",
+    "konum": "pos",
+    "düğme": "button", "dugme": "button",
+    "düğmeler": "buttons", "dugmeler": "buttons",
+    "fark": "rel",
+}
+_PGZERO_ICE_AKTARMA = re.compile(r"^[ \t]*(?:import|from)[ \t]+(?:pgzrun|pgzero)\b", re.M)
+
+
+def _pgzero_parametreleri(kod):
+    if not _PGZERO_ICE_AKTARMA.search(kod):
+        return kod
+    try:
+        agac = ast.parse(kod)
+    except SyntaxError:
+        return kod
+    satirlar = kod.splitlines(keepends=True)
+    duzeltmeler = []  # (satır, bayt_başı, bayt_sonu, yeni_ad)
+    for islev in agac.body:
+        if not isinstance(islev, ast.FunctionDef) or islev.name not in _PGZERO_OLAY_ISLEVLERI:
+            continue
+        yeniler = {a.arg: _PGZERO_PARAMETRELERI[a.arg] for a in islev.args.args
+                   if a.arg in _PGZERO_PARAMETRELERI}
+        if not yeniler:
+            continue
+        for d in ast.walk(islev):
+            if isinstance(d, ast.arg) and d.arg in yeniler:
+                duzeltmeler.append((d.lineno, d.col_offset, d.col_offset + len(d.arg.encode()),
+                                    yeniler[d.arg]))
+            elif isinstance(d, ast.Name) and d.id in yeniler:
+                duzeltmeler.append((d.lineno, d.col_offset, d.end_col_offset, yeniler[d.id]))
+    for satir, bas, son, yeni in sorted(duzeltmeler, reverse=True):
+        bayt = satirlar[satir - 1].encode("utf-8")
+        satirlar[satir - 1] = (bayt[:bas] + yeni.encode("utf-8") + bayt[son:]).decode("utf-8")
+    return "".join(satirlar)
 
 
 def _ascii_yazimlari_tanima_bagla(kod, tanimlar):

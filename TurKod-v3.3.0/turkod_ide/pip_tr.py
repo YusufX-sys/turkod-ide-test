@@ -17,6 +17,12 @@ alt komutlar da çalışmaya devam eder.
 ilgili değilse None döndürür ve terminal komutu olduğu gibi çalıştırılır.
 """
 import re
+import shlex
+
+try:
+    from . import platform_katmani
+except ImportError:  # pragma: no cover - paket dışı çalıştırma
+    import platform_katmani
 
 ALT_KOMUTLAR = {
     # kurulum
@@ -80,6 +86,72 @@ Bayraklar: --yükselt, --evet, --sessiz, --ayrıntılı, -g <dosya> (gereksiniml
 """
 
 
+_KATLA = str.maketrans("çğıöşüÇĞİÖŞÜâÂîÎûÛ", "cgiosuCGIOSUaAiIuU")
+# Paket adından sonra gelen ek/sürüm kısmı: veri_tabloları[excel]==2.0
+_PAKET_ADI_RE = re.compile(r"^([^\[\]=<>!~;@\s]+)(.*)$", re.S)
+_PAKET_TABLOSU = None
+
+
+def _anahtar(ad: str) -> str:
+    return ad.translate(_KATLA).lower().replace("-", "_")
+
+
+def _paket_tablosu():
+    """Türkçe kütüphane adı (ve içe aktarma adı) -> (pip paketi | None, Python adı).
+
+    Kaynak: çevirici (TürKod modül adları) ve Kütüphane Rehberi (pip paket
+    adları). None: Python ile birlikte gelen standart kütüphane."""
+    global _PAKET_TABLOSU
+    if _PAKET_TABLOSU is not None:
+        return _PAKET_TABLOSU
+    tablo = {}
+    try:
+        try:
+            from .converter import MODUL_CEVIRILERI
+            from .kutuphane_aciklamalari import ACIKLAMALAR
+        except ImportError:
+            from converter import MODUL_CEVIRILERI
+            from kutuphane_aciklamalari import ACIKLAMALAR
+    except Exception:
+        _PAKET_TABLOSU = tablo
+        return tablo
+    for tr, py in MODUL_CEVIRILERI.items():
+        bilgi = ACIKLAMALAR.get(py)
+        if bilgi is None:
+            continue
+        paket = None if bilgi.get("standart") else bilgi.get("pip_adi")
+        if tr != py:
+            tablo.setdefault(_anahtar(tr), (paket, py))
+    # İçe aktarma adı pip paketinden farklı olanlar: "pip yükle cv2" eskiden
+    # PyPI'de bulunamıyor ya da (docx, sklearn) yanlış/eski paketi kuruyordu.
+    for py, bilgi in ACIKLAMALAR.items():
+        paket = bilgi.get("pip_adi")
+        if not bilgi.get("standart") and paket and _anahtar(paket) != _anahtar(py) \
+                and "." not in py:
+            tablo.setdefault(_anahtar(py), (paket, py))
+    _PAKET_TABLOSU = tablo
+    return tablo
+
+
+def paket_adini_cevir(arguman: str):
+    """Türkçe kütüphane adını pip paket adına çevirir; ek/sürüm kısmı korunur.
+
+    "satranç" -> "chess", "veri_tabloları==2.2" -> "pandas==2.2",
+    "görüntü_işleme" -> "opencv-python". Tanınmayan ad olduğu gibi döner.
+    Standart kütüphaneyse (matematik) ("", python_adı) döner."""
+    m = _PAKET_ADI_RE.match(arguman)
+    if not m:
+        return arguman, None
+    ad, kalan = m.groups()
+    karsilik = _paket_tablosu().get(_anahtar(ad))
+    if karsilik is None:
+        return arguman, None
+    paket, py = karsilik
+    if paket is None:
+        return "", py
+    return paket + kalan, None
+
+
 def pip_yardim_mi(komut: str) -> bool:
     """`pip`, `pip yardım` ve `pip yardim`: Türkçe özet gösterilir."""
     m = _KOMUT_RE.match((komut or "").strip())
@@ -96,7 +168,11 @@ def _tirnakla(yol: str) -> str:
 def _paket_yolu_ile(paket_yolu, komut):
     if not paket_yolu:
         return komut
-    return f'set "PYTHONPATH={paket_yolu.replace(chr(34), "")}" && {komut}'
+    if platform_katmani.windows_mu():
+        return f'set "PYTHONPATH={paket_yolu.replace(chr(34), "")}" && {komut}'
+    # Linux/macOS: kabuk /bin/sh. cmd.exe'nin "set" sözdizimi orada değişken
+    # atamıyordu; "pip listele / sil / bilgi" kullanıcı paketlerini görmüyordu.
+    return f"PYTHONPATH={shlex.quote(paket_yolu)} {komut}"
 
 
 def pip_komutu_cevir(komut: str, python_exe, paket_yolu: str):
@@ -137,6 +213,38 @@ def pip_komutu_cevir(komut: str, python_exe, paket_yolu: str):
             parca = _tirnakla(parca)
         argumanlar.append(parca)
 
+    # Türkçe kütüphane adları: "pip yükle satranç" -> chess. Yalnızca paket
+    # adı alan alt komutlarda ve bayrak/dosya olmayan argümanlarda.
+    if alt in ("install", "upgrade", "uninstall", "show", "download"):
+        standartlar = []
+        yeni = []
+        onceki = ""
+        for a in argumanlar:
+            tirnaksiz = a.strip('"')
+            if a.startswith("-") or onceki in ("-r", "--requirement", "-t", "--target",
+                                               "-d", "--dest", "-c", "--constraint",
+                                               "-i", "--index-url"):
+                yeni.append(a)
+            else:
+                karsilik, standart = paket_adini_cevir(tirnaksiz)
+                if standart:
+                    standartlar.append((tirnaksiz, standart))
+                elif karsilik != tirnaksiz:
+                    # "qrcode[pil]": köşeli ayraç sh'de dosya deseni sayılır; tırnaklanır.
+                    yeni.append(_tirnakla(karsilik) if a.startswith('"') or "[" in karsilik
+                                or _SURUM_KISITI_RE.match(karsilik) else karsilik)
+                else:
+                    yeni.append(a)
+            onceki = a
+        argumanlar = yeni
+        if standartlar and not [a for a in argumanlar if not a.startswith("-")]:
+            adlar = ", ".join(f"{tr_ad} ({py_ad})" for tr_ad, py_ad in standartlar)
+            ileti = (f"{adlar}: Python ile birlikte gelir, kurmana gerek yok. "
+                     "Kodunda doğrudan içe aktarabilirsin.")
+            # ascii(): Türkçe harfler \xe7 gibi kaçışlarla gider; komut satırı
+            # kod sayfasından (cmd.exe) etkilenmez. Tırnak içermez.
+            return f"{py} -c {_tirnakla('print(' + ascii(ileti) + ')')}"
+
     # "--yes" yalnızca kaldırmada geçerli bir pip seçeneğidir; diğerlerinde
     # pip "no such option" hatası veriyordu.
     if alt != "uninstall":
@@ -169,8 +277,12 @@ def pip_komutu_cevir(komut: str, python_exe, paket_yolu: str):
         if not argumanlar:
             return _paket_yolu_ile(paket_yolu, f"{py} -m pip list")
         aranan = argumanlar[0].replace('"', "")
-        return _paket_yolu_ile(
-            paket_yolu, f'{py} -m pip list | findstr /I /C:"{aranan}"')
+        if platform_katmani.windows_mu():
+            suzgec = f'findstr /I /C:"{aranan}"'
+        else:
+            # findstr yalnızca Windows'ta var; Linux/macOS'ta "pip ara" hiç çalışmıyordu.
+            suzgec = f"grep -i -F -- {shlex.quote(aranan)}"
+        return _paket_yolu_ile(paket_yolu, f"{py} -m pip list | {suzgec}")
 
     if alt in ("install", "download"):
         # --user / --prefix / --root, --target ile birlikte kullanılamaz

@@ -726,10 +726,10 @@ void WebviewBridge::HandleMethodCall(
     return result->Error(kErrorInvalidArgs);
   }
 
-  // setClipRects: [x1, y1, x2, y2, x1, y1, ...] (taşıyıcıya göre)
+  // setClipRects: [x1, y1, x2, y2, köşe yarıçapı, x1, ...] (taşıyıcıya göre)
   if (method_name.compare("setClipRects") == 0) {
     const auto list = std::get_if<flutter::EncodableList>(method_call.arguments());
-    if (!list || list->size() % 4 != 0) {
+    if (!list || list->size() % 5 != 0) {
       return result->Error(kErrorInvalidArgs);
     }
     std::vector<int> v;
@@ -743,10 +743,12 @@ void WebviewBridge::HandleMethodCall(
       }
     }
     std::vector<RECT> rects;
-    for (size_t i = 0; i + 3 < v.size(); i += 4) {
+    std::vector<int> radii;
+    for (size_t i = 0; i + 4 < v.size(); i += 5) {
       rects.push_back(RECT{v[i], v[i + 1], v[i + 2], v[i + 3]});
+      radii.push_back(v[i + 4]);
     }
-    webview_->SetClipRects(rects);
+    webview_->SetClipRects(rects, radii);
     return result->Success();
   }
 

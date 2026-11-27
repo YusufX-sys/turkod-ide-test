@@ -23,11 +23,8 @@ class ExeAyarlari {
   /// Tırnak içindeki sondaki "\" ikilenir: Windows komut satırında
   /// `"C:\Oyun Klasörü\"` biçimindeki \" kapanış tırnağını kaçırıyor,
   /// sonraki seçenekler klasör adına karışıyordu.
-  static String _tirnak(String s) {
-    if (s.isNotEmpty && !RegExp(r'[\s&|<>^]').hasMatch(s)) return s;
-    final sondaki = s.length - s.replaceFirst(RegExp(r'\\+$'), '').length;
-    return '"$s${'\\' * sondaki}"';
-  }
+  /// Linux/macOS'ta çift tırnak içinde $ ` " \ kaçırılır (platform_ayarlari).
+  static String _tirnak(String s) => komutSatiriTirnagi(s);
 
   /// [dosya]: .trpy dosyasının yolu. Python tarafındaki
   /// exe_donusturucu.komut_metni ile aynı sırayı üretir.
@@ -70,7 +67,7 @@ Future<void> exeDonusturmePaneliAc(BuildContext context) async {
   final ed = context.read<EditorProvider>();
   final tab = ed.activeTab;
   if (tab == null || ozelSekmeMi(tab.path)) {
-    showAppSnackbar(context, 'EXE yapmak için bir kod sekmesi aç',
+    showAppSnackbar(context, '${programDosyasiAdi()} yapmak için bir kod sekmesi aç',
         kind: SnackKind.error);
     return;
   }
@@ -84,7 +81,7 @@ Future<void> exeDonusturmePaneliAc(BuildContext context) async {
     final kaydedildi = await ed.saveActive();
     if (!kaydedildi || !context.mounted) {
       if (context.mounted) {
-        showAppSnackbar(context, 'EXE yapmak için önce dosyayı kaydet',
+        showAppSnackbar(context, '${programDosyasiAdi()} yapmak için önce dosyayı kaydet',
             kind: SnackKind.error);
       }
       return;
@@ -113,11 +110,15 @@ Future<void> exeDonusturmePaneliAc(BuildContext context) async {
 /// Çalıştır → EXE'nin Kaynak Kodunu Aç…: "Kaynak koduna bakılabilsin"
 /// seçilerek yapılmış bir TürKod EXE'sinin kodunu yeni sekmede açar.
 Future<void> exeKaynaginiAc(BuildContext context) async {
-  final r = await FilePicker.platform.pickFiles(
-    dialogTitle: 'Kaynak koduna bakılacak EXE',
-    type: FileType.custom,
-    allowedExtensions: const ['exe'],
-  );
+  // Linux/macOS'ta program dosyasının uzantısı yoktur (macOS'ta .app'in içindeki
+  // dosya da seçilebilir): her dosya gösterilir.
+  final r = await dosyaPenceresi(
+      context,
+      () => FilePicker.platform.pickFiles(
+            dialogTitle: 'Kaynak koduna bakılacak ${programDosyasiAdi()}',
+            type: suankiIsletim == Isletim.windows ? FileType.custom : FileType.any,
+            allowedExtensions: suankiIsletim == Isletim.windows ? const ['exe'] : null,
+          ));
   final yol = r?.files.single.path;
   if (yol == null || !context.mounted) return;
   showAppSnackbar(context, '${p.basename(yol)} okunuyor…');
@@ -127,12 +128,12 @@ Future<void> exeKaynaginiAc(BuildContext context) async {
     final sonuc = await backend.call('exe_kaynagi', {'yol': yol});
     final kaynak = sonuc['kaynak']?.toString() ?? '';
     await ed.createUntitled(
-      name: '${p.basenameWithoutExtension(yol)} (EXE kaynağı).trpy',
+      name: '${p.basenameWithoutExtension(yol)} (${programDosyasiAdi()} kaynağı).trpy',
       content: kaynak,
       dirty: true,
     );
     if (context.mounted) {
-      showAppSnackbar(context, 'EXE\'nin TürKod kodu yeni sekmede açıldı',
+      showAppSnackbar(context, 'Programın TürKod kodu yeni sekmede açıldı',
           kind: SnackKind.success);
     }
   } on BackendException catch (e) {
@@ -141,7 +142,8 @@ Future<void> exeKaynaginiAc(BuildContext context) async {
     }
   } catch (e) {
     if (context.mounted) {
-      showAppSnackbar(context, 'EXE okunamadı: $e', kind: SnackKind.error);
+      showAppSnackbar(context, '${_ilkBuyuk(programDosyasiAdi())} okunamadı: $e',
+          kind: SnackKind.error);
     }
   }
 }
@@ -154,6 +156,15 @@ class ExeDonusturmePaneli extends StatefulWidget {
   @override
   State<ExeDonusturmePaneli> createState() => _ExeDonusturmePaneliState();
 }
+
+String _ilkBuyuk(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// Seçilebilecek simge türleri (exe_donusturucu.exe_yap ile aynı).
+List<String> get _simgeTurleri => switch (suankiIsletim) {
+      Isletim.windows => const ['ico'],
+      Isletim.macos => const ['icns', 'png', 'ico'],
+      Isletim.linux => const ['png', 'ico'],
+    };
 
 class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
   late final ExeAyarlari a = widget.ayar;
@@ -179,19 +190,23 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
       p.isWithin(_klasor, yol) ? p.relative(yol, from: _klasor) : yol;
 
   Future<void> _kayitYeriSec() async {
-    final d = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'EXE\'nin kaydedileceği klasör',
-        initialDirectory: _kayit.text.isEmpty ? _klasor : _kayit.text);
+    final d = await dosyaPenceresi(
+        context,
+        () => FilePicker.platform.getDirectoryPath(
+            dialogTitle: 'Programın kaydedileceği klasör',
+            initialDirectory: _kayit.text.isEmpty ? _klasor : _kayit.text));
     if (d == null || !mounted) return;
     setState(() => _kayit.text = a.kayitYeri = d);
   }
 
   Future<void> _simgeSec() async {
-    final r = await FilePicker.platform.pickFiles(
-        dialogTitle: 'EXE simgesi (.ico)',
-        initialDirectory: _klasor,
-        type: FileType.custom,
-        allowedExtensions: const ['ico']);
+    final r = await dosyaPenceresi(
+        context,
+        () => FilePicker.platform.pickFiles(
+            dialogTitle: 'Program simgesi (${_simgeTurleri.map((e) => '.$e').join(', ')})',
+            initialDirectory: _klasor,
+            type: FileType.custom,
+            allowedExtensions: _simgeTurleri));
     final yol = r?.files.single.path;
     if (yol == null || !mounted) return;
     setState(() => _simge.text = a.simge = _goreli(yol));
@@ -200,11 +215,15 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
   Future<void> _dosyaEkle({required bool klasor}) async {
     String? yol;
     if (klasor) {
-      yol = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: 'EXE\'ye eklenecek klasör', initialDirectory: _klasor);
+      yol = await dosyaPenceresi(
+          context,
+          () => FilePicker.platform.getDirectoryPath(
+              dialogTitle: 'Programa eklenecek klasör', initialDirectory: _klasor));
     } else {
-      final r = await FilePicker.platform.pickFiles(
-          dialogTitle: 'EXE\'ye eklenecek dosya', initialDirectory: _klasor);
+      final r = await dosyaPenceresi(
+          context,
+          () => FilePicker.platform.pickFiles(
+              dialogTitle: 'Programa eklenecek dosya', initialDirectory: _klasor));
       yol = r?.files.single.path;
     }
     if (yol == null || !mounted) return;
@@ -254,15 +273,22 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
     // karışmasın diye soluk gösterilir.
     final ipucu = TextStyle(color: t.colorScheme.onSurface.withValues(alpha: 0.4));
     final ad = a.ad.trim().isEmpty ? _varsayilanAd : a.ad.trim();
-    final hedef = a.klasorlu
-        ? p.join(hedefKlasor, ad, '$ad.exe')
-        : p.join(hedefKlasor, '$ad.exe');
+    // exe_donusturucu.cikti_yollari ile aynı: Windows .exe, Linux uzantısız,
+    // macOS'ta pencereli program .app paketi.
+    final uzanti = programUzantisi(a.pencere.name);
+    final hedef = uzanti == '.app'
+        ? p.join(hedefKlasor, '$ad.app')
+        : a.klasorlu
+            ? p.join(hedefKlasor, ad, '$ad$uzanti')
+            : p.join(hedefKlasor, '$ad$uzanti');
+    final windows = suankiIsletim == Isletim.windows;
+    final etiket = exeDonusturEtiketi().replaceAll('…', '');
     return AlertDialog(
       titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       title: Row(children: [
         Icon(Icons.inventory_2_outlined, color: t.colorScheme.primary),
         const SizedBox(width: 10),
-        const Text('EXE\'ye Dönüştür'),
+        Text(etiket),
       ]),
       content: SizedBox(
         width: 640,
@@ -272,8 +298,14 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Programın, TürKod kurulu olmayan her Windows bilgisayarda '
-                'çift tıklanınca çalışan bir EXE dosyasına dönüşür.',
+                switch (suankiIsletim) {
+                  Isletim.windows => 'Programın, TürKod kurulu olmayan her Windows '
+                      'bilgisayarda çift tıklanınca çalışan bir EXE dosyasına dönüşür.',
+                  Isletim.macos => 'Programın, TürKod kurulu olmayan Mac\'lerde çift '
+                      'tıklanınca açılan bir uygulamaya (.app) dönüşür.',
+                  Isletim.linux => 'Programın, TürKod kurulu olmayan Linux '
+                      'bilgisayarlarda çalışan tek bir program dosyasına dönüşür.',
+                },
                 style: t.textTheme.bodySmall,
               ),
               const SizedBox(height: 4),
@@ -285,12 +317,12 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
               TextField(
                 controller: _ad,
                 decoration: InputDecoration(
-                  labelText: 'EXE\'nin adı',
+                  labelText: windows ? 'EXE\'nin adı' : 'Programın adı',
                   hintText: _varsayilanAd,
                   hintStyle: ipucu,
                   isDense: true,
                   floatingLabelBehavior: FloatingLabelBehavior.always,
-                  suffixText: '.exe',
+                  suffixText: uzanti.isEmpty ? null : uzanti,
                 ),
                 onChanged: (v) => setState(() => a.ad = v),
               ),
@@ -324,8 +356,15 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
                   _pencereSecenegi(ExePencere.turkod, 'TürKod terminalinde',
                       'Koyu TürKod terminal penceresi açılır; yazdır çıktısı '
                       've girdi_al orada görünür. Hatalar Türkçe ve renklidir.'),
-                  _pencereSecenegi(ExePencere.konsol, 'Windows konsolunda',
-                      'Klasik siyah Windows komut penceresinde çalışır.'),
+                  _pencereSecenegi(
+                      ExePencere.konsol,
+                      windows ? 'Windows konsolunda' : 'Sistem terminalinde',
+                      windows
+                          ? 'Klasik siyah Windows komut penceresinde çalışır.'
+                          : suankiIsletim == Isletim.macos
+                              ? 'Çift tıklanınca Terminal\'de açılır.'
+                              : 'Bir terminalden başlatılır (çift tıklanınca '
+                                  'terminal açılmaz).'),
                   _pencereSecenegi(ExePencere.yok, 'Terminal olmadan',
                       'Hiç terminal açılmaz; yalnızca programın kendi '
                       'penceresi görünür (oyunlar, kaplumbağa çizimleri, '
@@ -336,17 +375,26 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
               _baslik('Seçenekler'),
               _tik(a.kaynakAcik, (v) => a.kaynakAcik = v,
                   'Kaynak koduna bakılabilsin',
-                  'EXE\'nin TürKod kodu "turkod kaynak program.exe" komutuyla '
-                  'ya da Çalıştır → EXE\'nin Kaynak Kodunu Aç ile görülebilir. '
-                  'İşaretlenmezse kodun yalnızca derlenmiş hâli konur.'),
+                  windows
+                      ? 'EXE\'nin TürKod kodu "turkod kaynak program.exe" komutuyla '
+                          'ya da Çalıştır → EXE\'nin Kaynak Kodunu Aç ile görülebilir. '
+                          'İşaretlenmezse kodun yalnızca derlenmiş hâli konur.'
+                      : 'Programın TürKod kodu "turkod kaynak ${p.basename(hedef)}" '
+                          'komutuyla ya da Çalıştır → ${exeKaynakEtiketi().replaceAll('…', '')} '
+                          'ile görülebilir. İşaretlenmezse kodun yalnızca derlenmiş hâli konur.'),
               _tik(a.klasorlu, (v) => a.klasorlu = v,
                   'Tek dosya yerine klasör yap',
                   'Program daha hızlı açılır, ama başka bilgisayara bütün '
-                  'klasör kopyalanmalı.'),
+                  'klasör kopyalanmalı.',
+                  // macOS .app paketi zaten bir klasördür.
+                  etkin: uzanti != '.app'),
               _tik(a.sondaBekle, (v) => a.sondaBekle = v,
                   'Program bitince pencere kapanmasın',
-                  'Windows konsolu "Kapatmak için Enter\'a basın" der '
-                  '(yalnızca Windows konsolunda).',
+                  windows
+                      ? 'Windows konsolu "Kapatmak için Enter\'a basın" der '
+                          '(yalnızca Windows konsolunda).'
+                      : 'Terminal "Kapatmak için Enter\'a basın" der '
+                          '(yalnızca sistem terminalinde).',
                   etkin: a.pencere == ExePencere.konsol),
               _baslik('Simge ve dosyalar'),
               Row(children: [
@@ -354,7 +402,11 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
                   child: TextField(
                     controller: _simge,
                     decoration: InputDecoration(
-                      labelText: 'Simge (.ico, isteğe bağlı)',
+                      labelText: windows
+                          ? 'Simge (.ico, isteğe bağlı)'
+                          : suankiIsletim == Isletim.macos
+                              ? 'Simge (.icns, .png ya da .ico, isteğe bağlı)'
+                              : 'Simge (Linux\'ta kullanılmaz)',
                       hintText: 'TürKod simgesi',
                       hintStyle: ipucu,
                       isDense: true,
@@ -372,7 +424,8 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
               ]),
               const SizedBox(height: 10),
               Text(
-                'Programın kullandığı resim, ses gibi dosyalar EXE\'nin içine '
+                'Programın kullandığı resim, ses gibi dosyalar '
+                '${windows ? 'EXE\'nin' : 'programın'} içine '
                 'konur; program onları kendi klasöründeymiş gibi bulur.',
                 style: t.textTheme.bodySmall,
               ),
@@ -431,7 +484,7 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
               const SizedBox(height: 6),
               Text(
                 'Bu komutu terminale ya da TürKod Kabuğu\'na yazarak da aynı '
-                'EXE\'yi yapabilirsin. Seçenekler: turkod exe_yap --yardim',
+                '${windows ? 'EXE\'yi' : 'programı'} yapabilirsin. Seçenekler: turkod exe_yap --yardim',
                 style: t.textTheme.bodySmall?.copyWith(
                     color: t.colorScheme.onSurface.withValues(alpha: 0.65)),
               ),
@@ -452,7 +505,7 @@ class _ExeDonusturmePaneliState extends State<ExeDonusturmePaneli> {
         ),
         FilledButton.icon(
           icon: const Icon(Icons.inventory_2_outlined, size: 18),
-          label: const Text('EXE\'ye Dönüştür'),
+          label: Text(etiket),
           onPressed: () => Navigator.pop(context, komut),
         ),
       ],

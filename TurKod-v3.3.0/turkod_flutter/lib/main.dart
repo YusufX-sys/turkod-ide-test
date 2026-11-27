@@ -4,10 +4,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show AppExitResponse, AppExitType;
+import 'dart:ui' as ui show ImageByteFormat;
 import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/gestures.dart'; // PointerScrollEvent buradan gelir
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderAbstractViewport, RenderProxyBox;
+import 'package:flutter/rendering.dart'
+    show RenderAbstractViewport, RenderProxyBox, RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -18,7 +20,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:re_editor/re_editor.dart' as re;
 import 'package:webview_windows/webview_windows.dart'
-    show LoadingState, WebviewController, WebviewPopupWindowPolicy;
+    show HistoryChanged, LoadingState, WebviewController, WebviewPopupWindowPolicy;
+import 'package:webview_flutter/webview_flutter.dart' as wf;
 import 'acilis_ekrani.dart';
 import 'arayuz_turu.dart';
 import 'markdown_gorunum.dart';
@@ -31,8 +34,10 @@ part 'karsilama.dart';
 part 'arayuz_ogeleri.dart';
 part 'pdf_gorunum.dart';
 part 'kodi.dart';
+part 'kodi_ifade.dart';
 part 'kodi_kontrol.dart';
 part 'tarayici.dart';
+part 'kutuphane_rehberi.dart';
 
 extension _CodeLineSelectionX on re.CodeLineSelection {
   bool get isValid => baseIndex >= 0 && extentIndex >= 0;
@@ -491,8 +496,11 @@ class FixResult {
 class AppConfig {
   static const int preferredPort = 8765;
   static const String portFileName = 'turkod_backend_port';
-  static String get _portFile =>
-      p.join(Directory.systemTemp.path, portFileName);
+
+  /// Sunucunun portunu yazdığı dosya (turkod_ide/paths.py port_dosyasi_yolu
+  /// ile aynı kural): Windows'ta %TEMP%, Linux/macOS'ta paylaşılan /tmp yerine
+  /// kullanıcının veri klasörü.
+  static String get _portFile => portDosyasiYolu();
   static int? _portOverride;
 
   static Future<int> discoverPort({int retries = 10, int delayMs = 500}) async {
@@ -2135,7 +2143,7 @@ class EditorProvider extends ChangeNotifier {
 
   void _rememberRecent(String path) {
     if (path.startsWith('untitled:') || ozelSekmeMi(path)) return;
-    recentFiles.removeWhere((x) => p.equals(x, path));
+    recentFiles.removeWhere((x) => yollarAyniMi(x, path));
     recentFiles.insert(0, path);
     if (recentFiles.length > _maxRecent) {
       recentFiles.removeRange(_maxRecent, recentFiles.length);
@@ -2146,7 +2154,7 @@ class EditorProvider extends ChangeNotifier {
   }
 
   void forgetRecent(String path) {
-    recentFiles.removeWhere((x) => p.equals(x, path));
+    recentFiles.removeWhere((x) => yollarAyniMi(x, path));
     _backend
         .call('ayar_set', {'anahtar': 'son_dosyalar', 'deger': recentFiles})
         .catchError((_) => <String, dynamic>{});
@@ -2219,8 +2227,9 @@ class EditorProvider extends ChangeNotifier {
     if (_backend.isConnected && !_sessionLoaded) unawaited(loadSession());
   }
 
-  /// Editör zaten açıkken "Editör ile aç" yeni pencere açmaz: Windows tarafı
-  /// (runner/main.cpp) dosyaları bu pencereye iletir; burada sekme olarak açılır.
+  /// Editör zaten açıkken "Editör ile aç" yeni pencere açmaz: Windows'ta
+  /// runner/main.cpp, Linux'ta linux/runner/my_application.cc dosyaları bu
+  /// pencereye iletir; burada sekme olarak açılır.
   static const _tekOrnekKanali = MethodChannel('turkod/tek_ornek');
 
   Future<void> _tekOrnekKanaliniBagla() async {
@@ -2694,9 +2703,10 @@ class EditorProvider extends ChangeNotifier {
     bool saveSession = true,
     BuildContext? context,
   }) async {
-    // p.equals: Windows'ta büyük/küçük harf ve ayırıcı farkı aynı dosyadır
-    // (komut satırı, tek örnek kanalı ve gezgin farklı yazımla gönderebilir).
-    final idx = _tabs.indexWhere((t) => p.equals(t.path, path));
+    // yollarAyniMi: Windows'ta ve macOS'ta büyük/küçük harf farkı (Windows'ta
+    // ayırıcı farkı da) aynı dosyadır (komut satırı, tek örnek kanalı ve gezgin
+    // farklı yazımla gönderebilir).
+    final idx = _tabs.indexWhere((t) => yollarAyniMi(t.path, path));
 
     if (idx >= 0) {
       if (makeActive) setActive(idx);
@@ -2715,7 +2725,7 @@ class EditorProvider extends ChangeNotifier {
     // açılmış olabilir: ikinci sekme açılmaz; ikisinden biri kaydedilince
     // diğerindeki değişiklikler sessizce eziliyordu.
     final simdi = _tabs.indexWhere(
-        (t) => p.equals(t.path, resolvedPath) || p.equals(t.path, path));
+        (t) => yollarAyniMi(t.path, resolvedPath) || yollarAyniMi(t.path, path));
     if (simdi >= 0) {
       if (makeActive) setActive(simdi);
       return;
@@ -2970,7 +2980,7 @@ class EditorProvider extends ChangeNotifier {
       final t = _tabs[i];
       if (t.filePath == null) continue;
       String? yeni;
-      if (p.equals(t.path, oldPath)) {
+      if (yollarAyniMi(t.path, oldPath)) {
         yeni = newPath;
       } else if (p.isWithin(oldPath, t.path)) {
         yeni = p.join(newPath, p.relative(t.path, from: oldPath));
@@ -2994,7 +3004,7 @@ class EditorProvider extends ChangeNotifier {
       changed = true;
     }
     for (var i = 0; i < recentFiles.length; i++) {
-      if (p.equals(recentFiles[i], oldPath)) recentFiles[i] = newPath;
+      if (yollarAyniMi(recentFiles[i], oldPath)) recentFiles[i] = newPath;
     }
     if (changed) {
       notifyListeners();
@@ -3008,12 +3018,12 @@ class EditorProvider extends ChangeNotifier {
     var changed = false;
     for (final t in _tabs) {
       if (t.filePath == null) continue;
-      if (p.equals(t.path, path) || p.isWithin(path, t.path)) {
+      if (yollarAyniMi(t.path, path) || p.isWithin(path, t.path)) {
         t.dirty = true;
         changed = true;
       }
     }
-    recentFiles.removeWhere((x) => p.equals(x, path) || p.isWithin(path, x));
+    recentFiles.removeWhere((x) => yollarAyniMi(x, path) || p.isWithin(path, x));
     if (changed) notifyListeners();
   }
 
@@ -3084,7 +3094,12 @@ class EditorProvider extends ChangeNotifier {
     final t = _tabs[index];
     if (ozelSekmeMi(t.path) || t.isPdf) return false;
 
-    final path = await FilePicker.platform.saveFile(fileName: t.name);
+    final path = await dosyaSecicisiyle(
+        () => FilePicker.platform.saveFile(fileName: t.name), (m) {
+      if (context != null && context.mounted) {
+        showAppSnackbar(context, m, kind: SnackKind.error);
+      }
+    });
     if (path == null || path.isEmpty) return false;
 
     var name = p.basename(path);
@@ -3111,7 +3126,7 @@ class EditorProvider extends ChangeNotifier {
             x.id != t.id &&
             x.dirty &&
             !ozelSekmeMi(x.path) &&
-            p.equals(x.path, path))
+            yollarAyniMi(x.path, path))
         .firstOrNull;
     if (kirliHedef != null) {
       final sor = farkliKaydetHedefKirliSor;
@@ -3127,7 +3142,7 @@ class EditorProvider extends ChangeNotifier {
     // eskisiyle değiştiriyordu.
     for (var i = _tabs.length - 1; i >= 0; i--) {
       final x = _tabs[i];
-      if (x.id != t.id && !ozelSekmeMi(x.path) && p.equals(x.path, path)) {
+      if (x.id != t.id && !ozelSekmeMi(x.path) && yollarAyniMi(x.path, path)) {
         await closeTab(i);
       }
     }
@@ -4187,7 +4202,7 @@ class BreakpointProvider extends ChangeNotifier {
     if (dosya == null) return tabId == _debugTabId ? _currentLine : null;
     // Modüldeki satır ana dosyada değil, modülün sekmesinde vurgulanır.
     final t = _editor?.tabs.where((t) => t.id == tabId).firstOrNull;
-    return t != null && p.equals(t.path, dosya) ? _currentLine : null;
+    return t != null && yollarAyniMi(t.path, dosya) ? _currentLine : null;
   }
 
   void clearNotice() {
@@ -4626,7 +4641,7 @@ class BreakpointProvider extends ChangeNotifier {
       ed.openFile(dosya).then((_) {
         WidgetsBinding.instance.addPostFrameCallback((_) =>
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!p.equals(ed.activeTab?.path ?? '', dosya)) return;
+              if (!yollarAyniMi(ed.activeTab?.path ?? '', dosya)) return;
               final reveal = ed.revealModelLine;
               if (reveal != null) {
                 reveal(line);
@@ -5186,8 +5201,16 @@ void _runFind(BuildContext context, bool replace) {
   context.read<UiProvider>().openFind(replace, seed: seed);
 }
 
+/// Dosya / klasör seçme penceresi; açılamazsa (Linux'ta zenity yoksa)
+/// kullanıcıya Türkçe bir iletiyle söylenir.
+Future<T?> dosyaPenceresi<T>(BuildContext context, Future<T?> Function() sec) =>
+    dosyaSecicisiyle(sec, (m) {
+      if (context.mounted) showAppSnackbar(context, m, kind: SnackKind.error);
+    });
+
 Future<void> openFilePicker(BuildContext context) async {
-  final r = await FilePicker.platform.pickFiles(type: FileType.any);
+  final r = await dosyaPenceresi(
+      context, () => FilePicker.platform.pickFiles(type: FileType.any));
   if (!context.mounted) return;
 
   if (r != null && r.files.isNotEmpty && r.files.first.path != null) {
@@ -5906,23 +5929,30 @@ class OzelKisayollar {
 List<AppAction> buildAppActions() =>
     OzelKisayollar.uygula(_varsayilanEylemler());
 
-/// Varsayılan eylemler; macOS'ta Ctrl'li kısayollar Cmd'ye çevrilir.
+/// Varsayılan eylemler; macOS'ta Ctrl'li kısayollar Cmd'ye çevrilir, sisteme
+/// göre farklı olanlar (macOS'ta Yinele, Bul / Değiştir) platform_ayarlari'ndan.
 List<AppAction> _varsayilanEylemler() {
   final eylemler = _tanimliEylemler();
   if (suankiIsletim != Isletim.macos) return eylemler;
   return [
-    for (final a in eylemler)
-      AppAction(
-        id: a.id,
-        label: a.label,
-        menu: a.menu,
-        icon: a.icon,
-        run: a.run,
-        activator: a.activator == null ? null : platformKisayolu(a.activator!),
-        shortcut: platformKisayolMetni(a.shortcut),
-        eklenti: a.eklenti,
-      ),
+    for (final a in eylemler) _sistemeUygunEylem(a),
   ];
+}
+
+AppAction _sistemeUygunEylem(AppAction a) {
+  final istisna = sistemKisayolIstisnasi(a.id);
+  return AppAction(
+    id: a.id,
+    label: a.label,
+    menu: a.menu,
+    icon: a.icon,
+    run: a.run,
+    activator: istisna != null
+        ? istisna.activator
+        : (a.activator == null ? null : platformKisayolu(a.activator!)),
+    shortcut: istisna?.shortcut ?? platformKisayolMetni(a.shortcut),
+    eklenti: a.eklenti,
+  );
 }
 
 Map<String, String>? _guncelKisayollar;
@@ -6199,7 +6229,7 @@ List<AppAction> _tanimliEylemler() {
       menu: 'Dosya',
       icon: Icons.folder_open,
       run: (c) async {
-        final d = await FilePicker.platform.getDirectoryPath();
+        final d = await dosyaPenceresi(c, () => FilePicker.platform.getDirectoryPath());
         if (d != null && c.mounted) {
           await c.read<FileTreeProvider>().setProjectDirectory(d);
         }
@@ -6274,7 +6304,8 @@ List<AppAction> _tanimliEylemler() {
       },
     ),
     // Ctrl+Z / Ctrl+Y editörün kendisinde çalışır; menü ve komut paletinden
-    // erişim için burada kısayolsuz kayıtlıdır.
+    // erişim için burada kısayolsuz kayıtlıdır (macOS'ta Yinele Cmd+Shift+Z:
+    // sistemKisayolIstisnasi).
     AppAction(
       id: 'edit.undo',
       label: 'Geri Al',
@@ -6657,18 +6688,18 @@ List<AppAction> _tanimliEylemler() {
       icon: Icons.tune,
       run: (c) => _runArgsDialog(c),
     ),
-    // EXE'ye Dönüştür yalnızca Windows'ta: Linux/macOS menüsünde görünmez.
+    // Windows'ta .exe, Linux'ta program dosyası, macOS'ta .app yapar.
     if (exeDonusturmeVar()) ...[
       AppAction(
         id: 'run.exe',
-        label: "EXE'ye Dönüştür…",
+        label: exeDonusturEtiketi(),
         menu: 'Çalıştır',
         icon: Icons.inventory_2_outlined,
         run: (c) => exeDonusturmePaneliAc(c),
       ),
       AppAction(
         id: 'run.exe_kaynak',
-        label: "EXE'nin Kaynak Kodunu Aç…",
+        label: exeKaynakEtiketi(),
         menu: 'Çalıştır',
         icon: Icons.source_outlined,
         run: (c) => exeKaynaginiAc(c),
@@ -6887,6 +6918,13 @@ List<AppAction> _tanimliEylemler() {
       menu: 'Öğren',
       icon: Icons.public,
       run: (c) => baglantiAc(c, kSiteUrl),
+    ),
+    AppAction(
+      id: 'learn.libraries',
+      label: 'Kütüphane Rehberi',
+      menu: 'Öğren',
+      icon: Icons.local_library_outlined,
+      run: (c) => kutuphaneRehberiniAc(c),
     ),
     AppAction(
       id: 'help.tour',
@@ -8520,16 +8558,27 @@ class _MenuBar extends StatelessWidget {
         PlatformMenuItemGroup(members: [
           PlatformMenuItem(label: 'Ayarlar…', onSelected: () => calistir('view.settings')),
         ]),
+        // Gizle (Cmd+H), Diğerlerini Gizle, Tümünü Göster: macOS'un kendi öğeleri.
+        PlatformMenuItemGroup(members: [
+          for (final t in const [
+            PlatformProvidedMenuItemType.hide,
+            PlatformProvidedMenuItemType.hideOtherApplications,
+            PlatformProvidedMenuItemType.showAllApplications,
+          ])
+            if (PlatformProvidedMenuItem.hasMenu(t)) PlatformProvidedMenuItem(type: t),
+        ]),
         PlatformMenuItemGroup(members: [
           PlatformMenuItem(
-            label: "TürKod'tan Çık",
+            label: "TürKod'dan Çık",
             shortcut: const SingleActivator(LogicalKeyboardKey.keyQ, meta: true),
             // Kaydedilmemiş dosyalar için çıkış sorusu (_cikisIstendi) burada da sorulur.
             onSelected: () => ServicesBinding.instance.exitApplication(AppExitType.cancelable),
           ),
         ]),
       ]),
-      for (final g in _groups)
+      for (final g in _groups) ...[
+        // macOS'ta Pencere menüsü Yardım'dan önce gelir.
+        if (g == 'Yardım') _macPencereMenusu(),
         if (actions.any((a) => a.menu == g && a.gorunur(context)))
           PlatformMenu(label: g, menus: [
             for (final a in actions.where((a) => a.menu == g && a.gorunur(context)))
@@ -8539,13 +8588,33 @@ class _MenuBar extends StatelessWidget {
                 onSelected: () => a.run(context),
               ),
           ]),
+      ],
     ];
   }
+
+  /// Pencere menüsü: Küçült (Cmd+M), Yakınlaştır, Tam Ekran, Tümünü Öne Getir
+  /// (macOS'un kendi öğeleri; adlarını sistem verir).
+  static PlatformMenu _macPencereMenusu() => PlatformMenu(label: 'Pencere', menus: [
+        PlatformMenuItemGroup(members: [
+          for (final t in const [
+            PlatformProvidedMenuItemType.minimizeWindow,
+            PlatformProvidedMenuItemType.zoomWindow,
+            PlatformProvidedMenuItemType.toggleFullScreen,
+          ])
+            if (PlatformProvidedMenuItem.hasMenu(t)) PlatformProvidedMenuItem(type: t),
+        ]),
+        PlatformMenuItemGroup(members: [
+          if (PlatformProvidedMenuItem.hasMenu(
+              PlatformProvidedMenuItemType.arrangeWindowsInFront))
+            const PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.arrangeWindowsInFront),
+        ]),
+      ]);
 
   @override
   Widget build(BuildContext context) {
     final menuler = _menuSatiri(context);
-    if (!Platform.isMacOS) return menuler;
+    if (!sistemMenuCubuguVar()) return menuler;
     return PlatformMenuBar(menus: _macMenuleri(context), child: menuler);
   }
 
@@ -9338,7 +9407,8 @@ class FileTreePanel extends StatelessWidget {
               ipucu: 'Klasör Aç',
               onPressed: conn
                   ? () async {
-                      final d = await FilePicker.platform.getDirectoryPath();
+                      final d = await dosyaPenceresi(
+                          context, () => FilePicker.platform.getDirectoryPath());
                       if (d != null && context.mounted) {
                         await context
                             .read<FileTreeProvider>()
@@ -9403,8 +9473,8 @@ class FileTreePanel extends StatelessWidget {
                                   'durduğu klasörü seç.',
                               dugme: 'Klasör Aç',
                               onPressed: () async {
-                                final d = await FilePicker.platform
-                                    .getDirectoryPath();
+                                final d = await dosyaPenceresi(context,
+                                    () => FilePicker.platform.getDirectoryPath());
                                 if (d != null && context.mounted) {
                                   await context
                                       .read<FileTreeProvider>()
@@ -11703,17 +11773,15 @@ class _CodeEditorState extends State<CodeEditor> {
     if (!mounted) return;
     final v = _modelToViewLine(modelLine);
     if (v == null) return;
-    jumpToLineIn(_ctrl, v);
-    // Gidilen satır görünümün ortasına getirilir: eskiden yalnızca görünür
-    // olacak kadar kaydırılıyor, satır en kenarda (Kodi'nin balonu ya da
-    // görünür alanın hemen dışında) kalabiliyordu. İmleç ortada olduğundan
-    // editör ayrıca kaydırmaz.
-    if (_textScroll.hasClients) {
-      final pos = _textScroll.position;
-      final lh = _lineHeight();
-      final hedef = (v - 1) * lh + 8 + lh / 2 - pos.viewportDimension / 2;
-      _textScroll.jumpTo(hedef.clamp(0.0, pos.maxScrollExtent).toDouble());
-    }
+    // İmleç taşınırken "görünür yap" adımı çalışmaz (satırı alt kenara
+    // koyuyordu); satır doğrudan görünümün ortasına getirilir. Bir kare sonra
+    // yeniden ortalanır: yeni kaydırma konumunda satırlar çizildikten sonra
+    // re_editor'ın kendi düzeltmesi satırı alta itmesin.
+    _withPreservedView(() => jumpToLineIn(_ctrl, v));
+    _ensureCaretVisible(ortala: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && cursorLineOf(_ctrl) == v) _ensureCaretVisible(ortala: true);
+    });
   }
 
   int _caretModelLine() {
@@ -12042,12 +12110,13 @@ class _CodeEditorState extends State<CodeEditor> {
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    // Hayalet kod: Tab kabul, Ctrl+→ kelime kelime kabul, Esc kapatır.
+    // Hayalet kod: Tab kabul, Ctrl+→ kelime kelime kabul (macOS'ta Option+→:
+    // orada Ctrl+→ masaüstünü değiştirir), Esc kapatır.
     // (Öneri listesi açıkken Tab listeye gider.)
     if (_hayalet != null && !_sugVisible) {
       final k = event.logicalKey;
       final hk = HardwareKeyboard.instance;
-      if (k == LogicalKeyboardKey.tab && !hk.isShiftPressed && !hk.isControlPressed) {
+      if (k == LogicalKeyboardKey.tab && !hk.isShiftPressed && !kisayolTusuBasili()) {
         _hayaletKabul();
         return KeyEventResult.handled;
       }
@@ -12055,7 +12124,7 @@ class _CodeEditorState extends State<CodeEditor> {
         _hayaletKapat();
         return KeyEventResult.handled;
       }
-      if (k == LogicalKeyboardKey.arrowRight && hk.isControlPressed && !hk.isShiftPressed) {
+      if (k == LogicalKeyboardKey.arrowRight && kelimeKabulTusuBasili() && !hk.isShiftPressed) {
         _hayaletKabul(kelime: true);
         return KeyEventResult.handled;
       }
@@ -12108,9 +12177,8 @@ class _CodeEditorState extends State<CodeEditor> {
     // Windows'ta AltGr, Ctrl+Alt olarak bildirilir. Türkçe Q klavyede
     // AltGr ile yazılan | [ ] { } karakterleri eskiden "Ctrl" kısayolu sayılıp
     // yutuluyor (AltGr+- yakınlaştırmayı küçültüyordu) ve parantez
-    // otomatik kapatma çalışmıyordu.
-    final ctrlPressed = HardwareKeyboard.instance.isControlPressed &&
-        !HardwareKeyboard.instance.isAltPressed;
+    // otomatik kapatma çalışmıyordu. macOS'ta bu tuşlar Cmd ile çalışır.
+    final ctrlPressed = kisayolTusuBasili() && !HardwareKeyboard.instance.isAltPressed;
     final shiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
     if (ctrlPressed) {
@@ -12929,10 +12997,30 @@ class _CodeEditorState extends State<CodeEditor> {
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
+  /// Editörün (re_editor) gerçekte çizdiği satır yüksekliği. re_editor bunu
+  /// yazı tipinin kendi ölçüsünden (TextPainter.preferredLineHeight) alır ve
+  /// tam piksele yuvarlanır: Consolas 14 punto için 19,6 değil 20. Eskiden
+  /// "yazı boyutu × 1,4" kullanılıyordu; fark her satırda birikiyor, 2000.
+  /// satırda ~800 piksel (~40 satır) oluyordu. Büyük dosyada uzak bir satıra
+  /// tıklayınca ya da yazınca imleç "görünmüyor" sanılıp satır ekranın en
+  /// altına kaydırılıyordu.
   double _lineHeight() {
-    final strut = _strut();
-    return strut.fontSize! * strut.height!;
+    final style = _style();
+    final anahtar = '${style.fontFamily}|${style.fontSize}';
+    if (anahtar != _satirYuksekligiAnahtari) {
+      final p = TextPainter(
+        text: TextSpan(text: ' ', style: style),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      _satirYuksekligi = p.preferredLineHeight;
+      _satirYuksekligiAnahtari = anahtar;
+      p.dispose();
+    }
+    return _satirYuksekligi;
   }
+
+  String? _satirYuksekligiAnahtari;
+  double _satirYuksekligi = 0;
 
   double _fs() {
     final s =
@@ -12952,42 +13040,62 @@ class _CodeEditorState extends State<CodeEditor> {
     );
   }
 
-  StrutStyle _strut() {
-    final family =
-        context.read<SettingsProvider>().getString('yazi_tipi', fallback: '');
-    return StrutStyle(
-      fontFamily: family.trim().isNotEmpty ? family.trim() : kMonoFontFamily,
-      fontFamilyFallback: kMonoFontFallback,
-      fontSize: _fs(),
-      height: 1.4,
-      forceStrutHeight: true,
-      leadingDistribution: TextLeadingDistribution.even,
-    );
-  }
-
-  void _ensureCaretVisible() {
+  /// İmleci görünür alana getirir. Konumu re_editor ölçer (çizilmiş
+  /// satırlardan): eskiden "(satır - 1) × satır yüksekliği" ile tahmin
+  /// ediliyordu; bu, büyük dosyalarda yuvarlama farkı birikince ve kelime
+  /// sarma açıkken yanlış yere kaydırıyordu. _reCtrl'ün seçimi bu noktada
+  /// _syncReText ile _ctrl'e eşitlenmiştir.
+  void _ensureCaretVisible({bool ortala = false}) {
     if (!_textScroll.hasClients) return;
+    final pos = _textScroll.position;
+    if (context.read<SettingsProvider>().getBool('kelime_sar')) {
+      // Sarılan satırların yüksekliği değişkendir; konumu re_editor ölçer.
+      ortala
+          ? _reCtrl.makeCursorCenterIfInvisible()
+          : _reCtrl.makeCursorVisible();
+      return;
+    }
     final off = _ctrl.selection.isValid ? _ctrl.selection.baseOffset : 0;
     final lh = _lineHeight();
-    final line = _lineNumber(_ctrl.text, off);
-    final top = (line - 1) * lh;
-    final vp = _vpSize.height;
-    double o = _textScroll.offset;
-    if (top < o) {
-      o = top;
-    } else if (top + lh > o + vp) {
-      o = top + lh - vp;
+    final ust = _kEditorUstBosluk + (_lineNumber(_ctrl.text, off) - 1) * lh;
+    final vp = pos.viewportDimension;
+    final o = pos.pixels;
+    // Altta yatay kaydırma çubuğu ve bir satırlık pay: re_editor imleci tam
+    // alt kenara koyuyordu; satır kaydırma çubuğunun altında kalıp ancak biraz
+    // aşağı kaydırınca görünüyordu.
+    final altPay = lh + _kKaydirmaCubuguPayi;
+    final ustPay = lh * 0.5;
+    final gorunur = ust >= o && ust + lh <= o + vp;
+    double hedef = o;
+    if (ortala || !gorunur) {
+      // Görünmeyen bir satıra sıçrama (Bul, Sorunlar, Satıra Git ...):
+      // satır görünümün ortasına gelir.
+      if (ortala || ust < o - lh || ust > o + vp) {
+        hedef = ust + lh / 2 - vp / 2;
+      } else if (ust < o + ustPay) {
+        hedef = ust - ustPay;
+      } else {
+        hedef = ust + lh - vp + altPay;
+      }
+    } else if (ust + lh > o + vp - altPay) {
+      hedef = ust + lh - vp + altPay; // ok tuşu / yazma: en az kaydırma
+    } else if (ust < o + ustPay && o > 0) {
+      hedef = ust - ustPay;
     }
-    o = o.clamp(0.0, _textScroll.position.maxScrollExtent);
-    if ((o - _textScroll.offset).abs() > 1) _textScroll.jumpTo(o);
+    hedef = hedef.clamp(0.0, pos.maxScrollExtent).toDouble();
+    if ((hedef - o).abs() > 0.5) _textScroll.jumpTo(hedef);
+    // Yatay: imlecin satır içindeki x konumu ölçülür (yalnızca yatay
+    // kaydırılır; re_editor'ın makeCursorVisible'ı dikeyde de kaydırıp
+    // ortalamayı bozardı).
     if (!_hScroll.hasClients) return;
     final ls = _lineStart(_ctrl.text, off);
-    final prefix = _ctrl.text.substring(ls, off.clamp(ls, _ctrl.text.length));
+    final onek = _ctrl.text.substring(ls, off.clamp(ls, _ctrl.text.length));
     final tp = TextPainter(
-        text: TextSpan(text: prefix, style: _style()),
+        text: TextSpan(text: onek, style: _style()),
         textDirection: TextDirection.ltr)
       ..layout();
     final x = tp.width;
+    tp.dispose();
     final vw = math.max(80.0, _vpSize.width - 24);
     double ho = _hScroll.offset;
     if (x < ho) {
@@ -12995,9 +13103,15 @@ class _CodeEditorState extends State<CodeEditor> {
     } else if (x > ho + vw) {
       ho = x - vw;
     }
-    ho = ho.clamp(0.0, _hScroll.position.maxScrollExtent);
+    ho = ho.clamp(0.0, _hScroll.position.maxScrollExtent).toDouble();
     if ((ho - _hScroll.offset).abs() > 1) _hScroll.jumpTo(ho);
   }
+
+  /// re_editor'a verilen dikey iç boşluk (CodeEditor padding).
+  static const double _kEditorUstBosluk = 8;
+
+  /// Yatay kaydırma çubuğunun kapladığı yükseklik ve biraz pay.
+  static const double _kKaydirmaCubuguPayi = 16;
 
   String _contextWindow() => _contextWindowWithOffset().text;
 
@@ -13657,8 +13771,7 @@ class _CodeEditorState extends State<CodeEditor> {
         color: theme.colorScheme.surface,
         child: Listener(
           onPointerSignal: (e) {
-            if (e is PointerScrollEvent &&
-                HardwareKeyboard.instance.isControlPressed) {
+            if (e is PointerScrollEvent && kisayolTusuBasili()) {
               _zoom(e.scrollDelta.dy < 0 ? 1 : -1);
             }
           },
@@ -14564,7 +14677,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                     .call('kabuk_penceresi')
                     .then((r) {
                   if (r['ok'] != true && context.mounted) {
-                    showAppSnackbar(context, 'Kabuk penceresi açılamadı.',
+                    showAppSnackbar(context, kabukPenceresiHataMetni(r['hata']),
                         kind: SnackKind.error);
                   }
                 }).catchError((Object e) {
@@ -14681,13 +14794,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
               }(),
             if (!dar) ...[
               IconButton(
-                tooltip: 'Yazıyı Küçült (Ctrl+Tekerlek)',
+                tooltip: kisayolluMetin('Yazıyı Küçült (Ctrl+Tekerlek)'),
                 visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.zoom_out_rounded, size: 16),
                 onPressed: () => _zoomTerminal(context, -1),
               ),
               IconButton(
-                tooltip: 'Yazıyı Büyüt (Ctrl+Tekerlek)',
+                tooltip: kisayolluMetin('Yazıyı Büyüt (Ctrl+Tekerlek)'),
                 visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.zoom_in_rounded, size: 16),
                 onPressed: () => _zoomTerminal(context, 1),
@@ -14752,8 +14865,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
             _boyutuOlc(kisit.biggest, lineStyle, MediaQuery.textScalerOf(lc));
             return Listener(
             onPointerSignal: (e) {
-              if (e is PointerScrollEvent &&
-                  HardwareKeyboard.instance.isControlPressed) {
+              if (e is PointerScrollEvent && kisayolTusuBasili()) {
                 _zoomTerminal(context, e.scrollDelta.dy < 0 ? 1 : -1);
               }
             },
@@ -15984,11 +16096,15 @@ class _SettingsPageState extends State<SettingsPage> {
       satir(kKodiYetkiEklenti, 'Eklentileri açıp kapatabilsin',
           'Kod Parçacıkları, Odak Zamanlayıcı, Karalama Defteri ...'),
       satir(kKodiYetkiKomut, 'Program komutlarını çalıştırabilsin',
-          'Menülerdeki her komut: EXE\'ye Dönüştür, Klavye Kısayolları, Bul / Değiştir ... '
+          'Menülerdeki her komut: ${exeDonusturEtiketi().replaceAll('…', '')}, '
+              'Klavye Kısayolları, Bul / Değiştir ... '
               'Çalıştırmak, kaydetmek gibi işlerden önce yine izin ister.'),
       satir(kKodiYetkiTarayici, 'Tarayıcıyı yönetebilsin',
-          'IDE içindeki tarayıcıda site açar, arar, tıklar, yazar. Şifre kutularına yazmaz; '
-              'satın alma, ödeme, silme gibi düğmelerden önce izin ister.'),
+          gomuluTarayiciVar()
+              ? 'IDE içindeki tarayıcıda site açar, arar, tıklar, yazar. Şifre kutularına yazmaz; '
+                  'satın alma, ödeme, silme gibi düğmelerden önce izin ister.'
+              : 'Siteyi ya da aramayı bilgisayarının tarayıcısında açar. Linux\'ta IDE içinde '
+                  'tarayıcı olmadığından sayfaya tıklayamaz, yazamaz.'),
       satir(kKodiHepSor, 'Her işten önce izin istesin',
           'Panel ya da pencere açmak gibi küçük işlerde bile önce sorar.',
           varsayilan: false),
@@ -16532,9 +16648,8 @@ class _SettingsPageState extends State<SettingsPage> {
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('.trpy dosyalarını TürKod ile ilişkilendir'),
-        subtitle: const Text(
-            'Çift tıklayınca çalıştır, sağ tıkta "Editör ile aç".',
-            style: TextStyle(fontSize: 11)),
+        subtitle: Text(dosyaIliskisiAciklamasi(),
+            style: const TextStyle(fontSize: 11)),
         value: d['iliskilendir'] == true,
         onChanged:
             etkin ? (v) => _entegrasyonAyarla('iliskilendir', v ?? false) : null,
@@ -16934,7 +17049,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   onChanged: (v) =>
                                       setState(() => _terminalFontSize = v)),
                               Text(
-                                'İpucu: İmleci terminal üzerine getirip Ctrl + fare tekerleği ile '
+                                'İpucu: İmleci terminal üzerine getirip ${kisayolTusuAdi()} + fare tekerleği ile '
                                 'de boyutu değiştirebilirsin.',
                                 style: TextStyle(
                                     fontSize: 10.5,
@@ -17017,11 +17132,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Çok satırlı otomatik tamamlama'),
-                          subtitle: const Text(
+                          subtitle: Text(
                               'Kapalıyken yalnızca bulunulan satır tamamlanır (daha hızlı). '
-                              'Tab: kabul · Ctrl+→: kelime kelime · Esc: kapat · '
-                              'Ctrl+Shift+Boşluk: öneri iste.',
-                              style: TextStyle(fontSize: 11)),
+                              'Tab: kabul · ${kelimeKabulKisayolMetni()}: kelime kelime · Esc: kapat · '
+                              '${kisayolluMetin('Ctrl+Shift+Boşluk')}: öneri iste.',
+                              style: const TextStyle(fontSize: 11)),
                           value: settings.getBool('ai_tamamlama_cok_satir', fallback: true),
                           onChanged: (v) => settings
                               .setValue('ai_tamamlama_cok_satir', v ?? true)
@@ -19100,18 +19215,21 @@ class _HomeShellState extends State<HomeShell> {
   // Varsayılan Ctrl+/ ve Ctrl+\ Türkçe Q klavyede basılamıyor: '/' Shift+7,
   // '\' AltGr (Ctrl+Alt) ile üretilir, SingleActivator ise değiştiricileri
   // birebir ister. Kullanıcı kısayolu değiştirmediyse eşdeğerleri de çalışır.
+  // macOS'ta (Türkçe Mac klavyesi) aynıları Cmd ile.
   static List<ShortcutActivator> _klavyeAlternatifleri(AppAction a) {
-    if (a.id == 'edit.comment' && a.shortcut == 'Ctrl+/') {
-      return const [
-        SingleActivator(LogicalKeyboardKey.numpadDivide, control: true),
-        SingleActivator(LogicalKeyboardKey.digit7, control: true, shift: true),
-        CharacterActivator('/', control: true),
+    if (a.id == 'edit.comment' && a.shortcut == platformKisayolMetni('Ctrl+/')) {
+      return [
+        platformKisayolu(
+            const SingleActivator(LogicalKeyboardKey.numpadDivide, control: true)),
+        platformKisayolu(const SingleActivator(LogicalKeyboardKey.digit7,
+            control: true, shift: true)),
+        platformKarakterKisayolu('/'),
       ];
     }
-    if (a.id == 'view.split' && a.shortcut == 'Ctrl+\\') {
-      return const [
-        CharacterActivator('\\', control: true),
-        CharacterActivator('\\', control: true, alt: true),
+    if (a.id == 'view.split' && a.shortcut == platformKisayolMetni('Ctrl+\\')) {
+      return [
+        platformKarakterKisayolu('\\'),
+        platformKarakterKisayolu('\\', alt: true),
       ];
     }
     return const [];
@@ -19476,6 +19594,9 @@ class _TurkodAppState extends State<TurkodApp> {
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             // Menü / iletişim kutusu açılınca tarayıcı sayfası anlık görüntüye geçer.
             navigatorObservers: [kTarayiciOrtuGozlemcisi],
+            // Kodi'nin "yalnızca TürKod penceresi" görüntüsü Linux/macOS'ta buradan.
+            builder: (context, child) =>
+                RepaintBoundary(key: kAnaPencereAnahtari, child: child),
             home: const HomeShell(),
           );
         },

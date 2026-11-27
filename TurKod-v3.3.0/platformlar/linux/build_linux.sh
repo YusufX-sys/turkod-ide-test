@@ -99,6 +99,7 @@ cp -a "$FLUTTER_CIKTI/." "$CIKIS/"
 cp -a "$DIST/backend" "$CIKIS/backend"
 if [ -d "$KOK/belgeler" ]; then
     cp -a "$KOK/belgeler" "$CIKIS/belgeler"
+    rm -f "$CIKIS/belgeler/KITAP_BAKIM.md"    # iç belge (kitabın bakımı): pakete girmez
 else
     echo "UYARI: belgeler/ yok; kitap ve lisanslar pakete girmeyecek." >&2
 fi
@@ -135,8 +136,11 @@ if [ "$APPIMAGE" -eq 1 ]; then
              "$APPDIR/usr/share/icons/hicolor/256x256/apps"
     cp -a "$CIKIS" "$APPDIR/usr/lib/turkod"
     install -m 755 "$KOK/platformlar/linux/AppRun" "$APPDIR/AppRun"
-    cp "$KOK/platformlar/linux/turkod.desktop" "$APPDIR/turkod.desktop"
-    cp "$KOK/platformlar/linux/turkod.desktop" "$APPDIR/usr/share/applications/turkod.desktop"
+    # .desktop dosyasının adı uygulama kimliğiyle aynı (my_application.cc: g_set_prgname
+    # ve application-id = org.turkod.TurKod): Wayland'de pencere bu adla eşleşir.
+    cp "$KOK/platformlar/linux/turkod.desktop" "$APPDIR/org.turkod.TurKod.desktop"
+    cp "$KOK/platformlar/linux/turkod.desktop" \
+       "$APPDIR/usr/share/applications/org.turkod.TurKod.desktop"
     cp "$FLUTTER_DIZINI/assets/icon/app_icon.png" "$APPDIR/turkod.png"
     cp "$FLUTTER_DIZINI/assets/icon/app_icon.png" \
        "$APPDIR/usr/share/icons/hicolor/256x256/apps/turkod.png"

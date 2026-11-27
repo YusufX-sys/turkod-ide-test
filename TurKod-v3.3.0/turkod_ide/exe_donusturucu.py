@@ -34,9 +34,9 @@ PyInstaller paketinin içinden okur (exe_kaynagi_oku).
 """
 import os
 import re
+import shlex
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 
@@ -62,7 +62,7 @@ SECENEKLER = [
     ("pencere=turkod", "--turkod-terminali", None,
      "Program TürKod terminal penceresinde çalışır (varsayılan)"),
     ("pencere=konsol", "--windows-konsolu", None,
-     "Program klasik siyah Windows konsolunda çalışır"),
+     "Program klasik siyah {KONSOLDA} çalışır"),
     ("pencere=yok", "--terminalsiz", None,
      "Terminal açılmaz; yalnızca programın kendi penceresi görünür (oyunlar, çizimler)"),
     ("kaynak", "--kaynak-acik", None,
@@ -70,7 +70,7 @@ SECENEKLER = [
     ("klasorlu", "--klasorlu", None,
      "Tek dosya yerine bir klasör yapar (program daha hızlı açılır)"),
     ("sonda_bekle", "--sonda-bekle", None,
-     "Windows konsolu, program bitince Enter'a basılana kadar kapanmaz"),
+     "{KONSOL}, program bitince Enter'a basılana kadar kapanmaz"),
     ("simge", "--simge", "<dosya.ico>", "EXE'nin simgesi"),
     ("ekler", "--dosya-ekle", "<dosya ya da klasör>",
      "Programın kullandığı resim, ses gibi dosyaları EXE'nin içine koyar "
@@ -85,6 +85,21 @@ def _bayrak_normal(metin):
 
 
 _BAYRAKLAR = {_bayrak_normal(b): (a, d) for a, b, d, _ in SECENEKLER}
+
+
+def konsol_adi(bulunma=False):
+    """--windows-konsolu seçeneğinin açtığı pencerenin sistemdeki adı
+    (bulunma=True: "... konsolunda" / "Terminal'de")."""
+    if platform_katmani.windows_mu():
+        return "Windows konsolunda" if bulunma else "Windows konsolu"
+    if platform_katmani.macos_mu():
+        return "Terminal'de" if bulunma else "Terminal"
+    return "sistem konsolunda" if bulunma else "sistem konsolu"
+
+
+def secenek_aciklamasi(aciklama):
+    return (aciklama.replace("{KONSOLDA}", konsol_adi(True))
+            .replace("{KONSOL}", konsol_adi()))
 
 
 def varsayilan_ayarlar():
@@ -136,7 +151,10 @@ def argumanlari_ayristir(parcalar):
 def _tirnak(metin):
     """Komut satırı için tırnaklar. Tırnak içindeki sondaki "\\" ikilenir:
     Windows komut satırında `"C:\\Oyun Klasörü\\"` biçimindeki \\" kapanış
-    tırnağını kaçırıyor, sonraki bütün seçenekler klasör adına karışıyordu."""
+    tırnağını kaçırıyor, sonraki bütün seçenekler klasör adına karışıyordu.
+    Linux/macOS kabuğunda shlex.quote: $, `, ', * gibi karakterler de güvenli."""
+    if not platform_katmani.windows_mu():
+        return shlex.quote(metin or "")
     if metin and not re.search(r'[\s&|<>^]', metin):
         return metin
     sondaki = len(metin) - len(metin.rstrip("\\"))
@@ -171,7 +189,7 @@ def yardim_metni():
     satirlar = ["Kullanım: turkod exe_yap <dosya.trpy> [seçenekler]", "", "Seçenekler:"]
     for _, bayrak, deger_adi, aciklama in SECENEKLER:
         sol = f"{bayrak} {deger_adi}" if deger_adi else bayrak
-        satirlar.append(f"  {sol:<36}{aciklama}")
+        satirlar.append(f"  {sol:<36}{secenek_aciklamasi(aciklama)}")
     satirlar += ["", "Örnek:",
                  '  turkod exe_yap oyun.trpy --ad "Uzay Oyunu" --terminalsiz --dosya-ekle resimler',
                  "", "EXE'nin kaynak koduna bakmak (--kaynak-acik ile yapıldıysa):",
@@ -241,8 +259,34 @@ _TK_EXE_DIZINI = _tk_os.path.dirname(_tk_os.path.abspath(_tk_sys.executable))
 _TK_PROGRAM_DIZINI = (getattr(_tk_sys, "_MEIPASS", _TK_EXE_DIZINI)
                       if _TK_EXE["veri"] else _TK_EXE_DIZINI)
 _TK_PROGRAM_DOSYASI = _tk_os.path.join(_TK_PROGRAM_DIZINI, _TK_EXE["ad"] + ".trpy")
+
+
+def _tk_mac_calisma_dizini(exe_yolu):
+    """macOS .app: program X.app/Contents/MacOS içinden çalışır. Göreli yolla
+    yazılan dosyalar paketin içine gidiyordu (indirilen uygulamada paket salt
+    okunurdur). Çalışma klasörü .app'in bulunduğu klasördür; oraya
+    yazılamıyorsa Belgeler. Mac değilse ya da .app değilse None."""
+    if _tk_sys.platform != "darwin":
+        return None
+    yol = _tk_os.path.abspath(exe_yolu)
+    isaret = ".app" + _tk_os.sep + "Contents" + _tk_os.sep
+    i = yol.find(isaret)
+    if i < 0:
+        return None
+    ust = _tk_os.path.dirname(yol[:i + len(".app")])
+    if _tk_os.access(ust, _tk_os.W_OK) and "/AppTranslocation/" not in ust:
+        return ust
+    belgeler = _tk_os.path.join(_tk_os.path.expanduser("~"), "Documents")
+    return belgeler if _tk_os.path.isdir(belgeler) else _tk_os.path.expanduser("~")
+
+
+# Eklenen dosyalar (resim, ses ...) _MEIPASS'ta kalır ve oradan okunur; ek
+# dosyası olmayan Mac uygulaması .app'in yanındaki klasörde çalışır.
+_TK_CALISMA_DIZINI = _TK_PROGRAM_DIZINI
+if not _TK_EXE["veri"]:
+    _TK_CALISMA_DIZINI = _tk_mac_calisma_dizini(_tk_sys.executable) or _TK_PROGRAM_DIZINI
 try:
-    _tk_os.chdir(_TK_PROGRAM_DIZINI)
+    _tk_os.chdir(_TK_CALISMA_DIZINI)
 except OSError:
     pass
 _tk_sys.path.insert(0, _TK_PROGRAM_DIZINI)
@@ -265,9 +309,16 @@ def _tk_akislari_hazirla():
         # Girdi yazılacak bir yer de yok: Python'un İngilizce "lost
         # sys.stdin" hatası yerine ne yapılacağı Türkçe söylenir.
         def _tk_girdi_yok(*_a, **_k):
+            if _tk_os.name == "nt":
+                raise RuntimeError(
+                    "Terminalsiz EXE'de girdi_al kullanılamaz: soru yazılacak bir terminal yok. "
+                    "EXE'yi 'TürKod terminalinde' ya da 'Windows konsolunda' seçeneğiyle "
+                    "yeniden yap.")
+            konsol = "Terminal'de" if _tk_sys.platform == "darwin" else "sistem konsolunda"
             raise RuntimeError(
-                "Terminalsiz EXE'de girdi_al kullanılamaz: soru yazılacak bir terminal yok. "
-                "EXE'yi 'TürKod terminalinde' ya da 'Windows konsolunda' seçeneğiyle yeniden yap.")
+                "Terminalsiz uygulamada girdi_al kullanılamaz: soru yazılacak bir terminal "
+                f"yok. Uygulamayı 'TürKod terminalinde' ya da '{konsol}' seçeneğiyle "
+                "yeniden yap.")
         import builtins
         builtins.input = _tk_girdi_yok
         return
@@ -297,6 +348,32 @@ def _tk_akislari_hazirla():
 _tk_akislari_hazirla()
 
 
+def _tk_ileti_kutusu(metin, baslik):
+    """Hata ileti kutusu: Windows'ta MessageBox, macOS'ta uyarı penceresi,
+    Linux'ta zenity / kdialog / xmessage (hangisi kuruluysa)."""
+    try:
+        if _tk_os.name == "nt":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, metin, baslik, 0x10)
+            return
+        import shutil
+        import subprocess
+        if _tk_sys.platform == "darwin":
+            subprocess.run(["osascript", "-e", "on run argv", "-e",
+                            "display alert (item 1 of argv) message (item 2 of argv) as critical",
+                            "-e", "end run", baslik, metin], timeout=3600)
+            return
+        for arac, secenek in (("zenity", ["--error", "--no-markup", "--title", baslik,
+                                          "--text", metin]),
+                              ("kdialog", ["--title", baslik, "--error", metin]),
+                              ("xmessage", ["-center", baslik + "\n\n" + metin])):
+            if shutil.which(arac):
+                subprocess.run([arac, *secenek], timeout=3600)
+                return
+    except Exception:
+        pass
+
+
 def _tk_exe_hata_bitti():
     """Terminalsiz EXE'de yakalanmamış hata ileti kutusunda gösterilir."""
     if _TK_EXE["pencere"] != "yok":
@@ -305,8 +382,7 @@ def _tk_exe_hata_bitti():
         metin = _tk_sys.stdout.getvalue()
         i = metin.rfind("[HATA]")
         metin = (metin[i:] if i >= 0 else metin[-1500:]).strip("=\n ")
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(None, metin, _TK_EXE["ad"] + " - Hata", 0x10)
+        _tk_ileti_kutusu(metin, _TK_EXE["ad"] + " - Hata")
     except Exception:
         pass
 
@@ -382,8 +458,23 @@ def _tk_beklenmeyen_hata(e):
         except Exception:
             pass
     try:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(None, metin, "TürKod programı - Hata", 0x10)
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, metin, "TürKod programı - Hata", 0x10)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["osascript", "-e", "on run argv", "-e",
+                            "display alert (item 1 of argv) message (item 2 of argv) as critical",
+                            "-e", "end run", "TürKod programı - Hata", metin], timeout=3600)
+        else:
+            import shutil
+            import subprocess
+            if shutil.which("zenity"):
+                subprocess.run(["zenity", "--error", "--no-markup", "--title",
+                                "TürKod programı - Hata", "--text", metin], timeout=3600)
+            elif shutil.which("kdialog"):
+                subprocess.run(["kdialog", "--title", "TürKod programı - Hata", "--error", metin],
+                               timeout=3600)
     except Exception:
         pass
 
@@ -546,6 +637,10 @@ _ARAC_CEVIRILERI = [(re.compile(d), t) for d, t in [
     (r".*\[WinError 225\].*|.*contains a virus or potentially unwanted software.*",
      "Antivirüs programı EXE'yi engelledi. Antivirüsün izin listesine ekleyip yeniden dene."),
     (r".*No space left on device.*|.*\[WinError 112\].*", "Diskte yeterli boş yer yok."),
+    (r".*Read-only file system.*",
+     "Bu disk ya da klasör salt okunur: oraya yazılamaz. Başka bir klasör seç."),
+    (r".*Permission denied.*",
+     "Erişim engellendi: o dosyaya ya da klasöre yazma izni yok."),
     (r"RecursionError: maximum recursion depth exceeded.*",
      "Program çok derin iç içe; EXE yapma aracı sınırı aştı."),
     (r"ModuleNotFoundError: No module named ['\"](.+?)['\"]",
@@ -632,11 +727,24 @@ _ADIMLAR = [
     ("Building PKG", "Program dosyaları birleştiriliyor..."),
     ("Building EXE", "EXE dosyası oluşturuluyor..."),
     ("Building COLLECT", "Program klasörü oluşturuluyor..."),
+    ("Building BUNDLE", "Mac uygulaması (.app) paketleniyor..."),
 ]
 
 # İçe aktarılınca veri dosyaları/eklentileri de toplanması gereken paketler.
 _TOPLANACAK = {"ursina": ("ursina", "panda3d", "panda3d_gltf", "simplepbr"),
-               "panda3d": ("panda3d",)}
+               "panda3d": ("panda3d",),
+               # Veri dosyaları (yazı tipleri, varsayılan resim/ses, pin sürücüleri)
+               # toplanmazsa EXE açılır açılmaz çöküyordu (PyInstaller 6 ile denendi).
+               "pgzrun": ("pgzero",), "pgzero": ("pgzero",),
+               "pyfiglet": ("pyfiglet",), "gpiozero": ("gpiozero",)}
+
+
+def _pillow_var(python_exe):
+    try:
+        return subprocess.run([python_exe, "-c", "import PIL"], env=_ortam(),
+                              capture_output=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def _ice_aktarilan_paketler(python_kodu):
@@ -645,6 +753,43 @@ def _ice_aktarilan_paketler(python_kodu):
 
 def _gecersiz_karakterleri_at(ad):
     return re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "", ad).strip(" .")
+
+
+def hedef_sistem():
+    """Programın yapıldığı (ve çalışacağı) sistem: PyInstaller yalnızca kendi
+    sistemi için paket yapar."""
+    if platform_katmani.windows_mu():
+        return "windows"
+    return "macos" if platform_katmani.macos_mu() else "linux"
+
+
+def mac_uygulamasi_mi(pencere, sistem=None):
+    """macOS'ta pencereli programlar .app paketi olur (Finder'da çift tıklanır);
+    konsol kipi Terminal'de açılan tek dosyadır."""
+    return (sistem or hedef_sistem()) == "macos" and pencere != "konsol"
+
+
+def cikti_yollari(kayit_yeri, ad, pencere, klasorlu, sistem=None):
+    """(kaydedilecek yol, çalıştırılan dosya). Windows: ad.exe; Linux: uzantısız
+    ad; macOS: ad.app (konsol kipinde uzantısız ad). Klasörlü: ad/ klasörü."""
+    s = sistem or hedef_sistem()
+    if mac_uygulamasi_mi(pencere, s):
+        app = os.path.join(kayit_yeri, ad + ".app")
+        return app, os.path.join(app, "Contents", "MacOS", ad)
+    dosya = ad + (".exe" if s == "windows" else "")
+    if klasorlu:
+        klasor = os.path.join(kayit_yeri, ad)
+        return klasor, os.path.join(klasor, dosya)
+    yol = os.path.join(kayit_yeri, dosya)
+    return yol, yol
+
+
+def _ic_klasorleri(exe_yolu):
+    """Klasörlü paketin veri klasörü adayları: _internal (Windows/Linux) ya da
+    .app'in Contents/Resources'ı (macOS)."""
+    dizin = os.path.dirname(exe_yolu)
+    return [os.path.join(dizin, "_internal"),
+            os.path.normpath(os.path.join(dizin, os.pardir, "Resources"))]
 
 
 # Windows'ta dosya adı olamayan aygıt adları ("CON.exe" de olmaz).
@@ -690,15 +835,22 @@ def _yazilabilir_mi(exe_yolu):
 
 
 def _turkod_klasoru_mu(klasor, ad):
-    """klasor, daha önce TürKod'un yaptığı klasörlü bir EXE mi? (içinde
-    <ad>.exe ve _internal/<imza dosyası> bulunur, imza doğrudur)."""
-    if not os.path.isfile(os.path.join(klasor, ad + ".exe")):
+    """klasor, daha önce TürKod'un yaptığı klasörlü bir EXE mi (ya da macOS'ta
+    .app paketi)? İçinde program dosyası ve imza dosyası bulunur, imza doğrudur."""
+    if klasor.endswith(".app"):
+        exe = os.path.join(klasor, "Contents", "MacOS", ad)
+    else:
+        exe = os.path.join(klasor, ad + (".exe" if hedef_sistem() == "windows" else ""))
+    if not os.path.isfile(exe):
         return False
-    try:
-        with open(os.path.join(klasor, "_internal", IMZA_DOSYASI), encoding="utf-8") as f:
-            return f.read(64).strip() == IMZA
-    except (OSError, UnicodeDecodeError):
-        return False
+    for ic in _ic_klasorleri(exe):
+        try:
+            with open(os.path.join(ic, IMZA_DOSYASI), encoding="utf-8") as f:
+                if f.read(64).strip() == IMZA:
+                    return True
+        except (OSError, UnicodeDecodeError):
+            pass
+    return False
 
 
 def _hedef_engeli(hedef, klasorlu, ad):
@@ -708,7 +860,7 @@ def _hedef_engeli(hedef, klasorlu, ad):
     kalıcı olarak gidiyordu. Artık yalnızca eski TürKod EXE'si değiştirilir."""
     if not os.path.lexists(hedef):
         return None
-    if klasorlu:
+    if klasorlu or hedef.endswith(".app"):
         if os.path.isdir(hedef) and not os.path.islink(hedef) and _turkod_klasoru_mu(hedef, ad):
             return None
         return (f"'{os.path.basename(hedef)}' adında, TürKod'un yapmadığı bir klasör "
@@ -780,19 +932,42 @@ def _eklenmemis_dosyalar(kod, kaynak_dizin, ekler):
     return eksik
 
 
+def _eksik_derleme_araci(sistem):
+    """Linux'ta PyInstaller programın kitaplıklarını objdump/objcopy (binutils)
+    ile inceler; yoksa derleme dakikalar sonra İngilizce bir hatayla düşerdi."""
+    if sistem != "linux":
+        return None
+    if all(shutil.which(arac) for arac in ("objdump", "objcopy")):
+        return None
+    return ("Uygulama yapmak için binutils gerekli: sudo apt install binutils "
+            "(Fedora: sudo dnf install binutils)")
+
+
+def _boyut_mb(yol):
+    """Dosyanın, ya da klasörse (macOS .app paketi) içindekilerin toplam boyutu."""
+    if not os.path.isdir(yol):
+        return os.path.getsize(yol) / (1024 * 1024)
+    toplam = 0
+    for kok, _klasorler, dosyalar in os.walk(yol):
+        for d in dosyalar:
+            tam = os.path.join(kok, d)
+            try:
+                if not os.path.islink(tam):
+                    toplam += os.path.getsize(tam)
+            except OSError:
+                pass
+    return toplam / (1024 * 1024)
+
+
 def exe_yap(dosya, ayar, yaz=print, kod=None):
     """dosya: .trpy yolu (kod verilirse yalnızca ad ve klasör için kullanılır).
     Döndürür: oluşan EXE'nin yolu ya da None."""
     def baslik(metin):
         yaz(f"[EXE] {metin}")
 
-    if not platform_katmani.windows_mu():
-        # Üretilen program Windows .exe'sidir (Windows konsolu, .ico simgesi,
-        # Windows ileti kutuları). Linux/macOS'ta yarı yolda bozuk bir dosya
-        # üretmek yerine açıkça söylenir.
-        yaz("[HATA] EXE'ye Dönüştür şimdilik yalnızca Windows'ta çalışır. Programını "
-            "Windows'ta TürKod ile açarak EXE yapabilirsin.")
-        return None
+    # PyInstaller yalnızca çalıştığı sistem için paket yapar: Windows'ta .exe,
+    # Linux'ta uzantısız program dosyası, macOS'ta .app (eskiden yalnızca Windows).
+    sistem = hedef_sistem()
     dosya = os.path.abspath(os.path.expanduser(dosya))
     if kod is None:
         if not os.path.isfile(dosya) and os.path.isfile(dosya + calistirici.UZANTI):
@@ -807,9 +982,9 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
     kaynak_dizin = os.path.dirname(dosya)
     ad = _gecersiz_karakterleri_at(ayar.get("ad") or
                                    os.path.splitext(os.path.basename(dosya))[0]) or "program"
-    if ad.lower().endswith(".exe"):
+    if ad.lower().endswith((".exe", ".app")):
         ad = _gecersiz_karakterleri_at(ad[:-4]) or "program"
-    if ad.split(".")[0].upper() in _AYRILMIS_ADLAR:
+    if sistem == "windows" and ad.split(".")[0].upper() in _AYRILMIS_ADLAR:
         yeni_ad = f"{ad}_program"
         yaz(f"[UYARI] '{ad}' Windows'ta dosya adı olamaz; EXE '{yeni_ad}.exe' adıyla yapılacak.")
         ad = yeni_ad
@@ -831,9 +1006,15 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
         if not os.path.isfile(simge):
             yaz(f"[HATA] Simge dosyası bulunamadı: {ayar['simge']}")
             return None
-        if not simge.lower().endswith(".ico"):
+        if sistem == "windows" and not simge.lower().endswith(".ico"):
             yaz(f"[HATA] Simge bir .ico dosyası olmalı: {ayar['simge']}")
             return None
+        if sistem == "macos" and not simge.lower().endswith((".ico", ".png", ".icns")):
+            yaz(f"[HATA] Simge bir .icns, .png ya da .ico dosyası olmalı: {ayar['simge']}")
+            return None
+        if sistem == "linux":
+            yaz("[UYARI] Linux'ta program dosyasının kendi simgesi olmaz; simge kullanılmadı.")
+            simge = ""
     ekler = []
     for e in ayar.get("ekler") or []:
         yol = os.path.abspath(os.path.join(kaynak_dizin, e))
@@ -852,7 +1033,10 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
             from ast_katmani import dogrula
             from converter import turkce_kodu_donustur, yerel_modulleri_hazirla
 
-    baslik(f"{os.path.basename(dosya)} -> {ad}.exe")
+    koyulacak, hedef_exe = cikti_yollari(kayit_yeri, ad, pencere, ayar.get("klasorlu"), sistem)
+    cikti_adi = os.path.basename(koyulacak) if not ayar.get("klasorlu") or \
+        koyulacak.endswith(".app") else os.path.basename(hedef_exe)
+    baslik(f"{os.path.basename(dosya)} -> {cikti_adi}")
     sonuc = dogrula(kod)
     if not sonuc.basarili:
         yaz("[HATA] Kodda hata var; önce düzeltilmeli:")
@@ -865,15 +1049,16 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
     for eksik in _eklenmemis_dosyalar(kod, kaynak_dizin, ekler):
         yaz(f"[UYARI] Program '{eksik}' dosyasını kullanıyor ama EXE'ye eklenmedi; başka "
             f"bilgisayarda bulunamaz. Eklemek için: --dosya-ekle \"{eksik}\"")
-    hedef_exe = (os.path.join(kayit_yeri, ad, ad + ".exe") if ayar.get("klasorlu")
-                 else os.path.join(kayit_yeri, ad + ".exe"))
-    koyulacak = os.path.dirname(hedef_exe) if ayar.get("klasorlu") else hedef_exe
     engel = _hedef_engeli(koyulacak, ayar.get("klasorlu"), ad)
     if engel:
         yaz(f"[HATA] {engel}")
         return None
     if not _yazilabilir_mi(hedef_exe):
-        yaz(f"[HATA] {ad}.exe şu an açık; kapatıp yeniden dene.")
+        yaz(f"[HATA] {cikti_adi} şu an açık; kapatıp yeniden dene.")
+        return None
+    eksik_arac = _eksik_derleme_araci(sistem)
+    if eksik_arac:
+        yaz(f"[HATA] {eksik_arac}")
         return None
     python_exe = calistirici.python_exe_bul()
     if not python_exe:
@@ -930,8 +1115,10 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
                 shutil.copy2(kaynak_yolu, os.path.join(ic, ic_ad))
 
         dagitim = os.path.join(gecici, "dagitim")
+        # macOS .app paketi klasörlüdür (PyInstaller tek dosyalı .app yapmaz).
+        klasorlu_paket = ayar.get("klasorlu") or mac_uygulamasi_mi(pencere, sistem)
         komut = [python_exe, "-m", "PyInstaller", "--noconfirm",
-                 "--onedir" if ayar.get("klasorlu") else "--onefile",
+                 "--onedir" if klasorlu_paket else "--onefile",
                  "--console" if pencere == "konsol" else "--windowed",
                  "--name", ad, "--distpath", dagitim,
                  "--workpath", os.path.join(gecici, "is"), "--specpath", gecici,
@@ -944,8 +1131,14 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
                       "--add-data", os.path.join(ic, KAYNAK_DOSYASI) + os.pathsep + "."]
         if os.path.isfile(os.path.join(ic, "_tk_cikti_cevirici.py")):
             komut += ["--hidden-import", "_tk_cikti_cevirici"]
-        if not simge:
+        if not simge and sistem != "linux":
             simge = _sablon_dosyasi("editor-logo.ico") or ""
+        if simge and sistem == "macos" and not simge.lower().endswith(".icns") \
+                and not _pillow_var(python_exe):
+            # PyInstaller .ico/.png'yi .icns'e Pillow ile çevirir; yoksa derleme düşer.
+            if ayar.get("simge"):
+                yaz("[UYARI] Simge .icns'e çevrilemedi (Pillow yok); varsayılan simge kullanıldı.")
+            simge = ""
         if simge:
             komut += ["--icon", simge]
         for e in ekler:
@@ -970,9 +1163,9 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
         baslik("Paketleniyor; bu işlem birkaç dakika sürebilir...")
         bas = time.monotonic()
         kod_, son = _calistir_akit(komut, yaz, cwd=gecici, satir_isle=isle)
-        hazir = os.path.join(dagitim, ad) if ayar.get("klasorlu") else \
-            os.path.join(dagitim, ad + ".exe")
-        hazir_exe = os.path.join(hazir, ad + ".exe") if ayar.get("klasorlu") else hazir
+        # PyInstaller'ın dagitim/ altındaki çıktısı kaydedileceği yerle aynı düzende.
+        hazir = os.path.join(dagitim, os.path.basename(koyulacak))
+        hazir_exe = os.path.join(dagitim, os.path.relpath(hedef_exe, kayit_yeri))
         if kod_ != 0 or not os.path.isfile(hazir_exe):
             yaz("[HATA] EXE oluşturulamadı. Ayrıntı:")
             _hata_ayrintisi_yaz(son, yaz)
@@ -980,7 +1173,7 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
         try:
             os.makedirs(kayit_yeri, exist_ok=True)
             if not _yazilabilir_mi(hedef_exe):
-                raise PermissionError(f"{ad}.exe şu an açık")
+                raise PermissionError(f"{cikti_adi} şu an açık")
             # Derleme dakikalar sürer: bu arada kullanıcı aynı adla bir
             # klasör/dosya oluşturmuş olabilir; yeniden denetlenir.
             engel = _hedef_engeli(koyulacak, ayar.get("klasorlu"), ad)
@@ -993,13 +1186,19 @@ def exe_yap(dosya, ayar, yaz=print, kod=None):
                 + _beklenmeyen_hata_metni(e).split(". ", 1)[-1])
             yaz("  EXE açıksa kapat ya da başka bir klasör seç, sonra yeniden dene.")
             return None
-        boyut = os.path.getsize(hedef_exe) / (1024 * 1024)
+        boyut = _boyut_mb(koyulacak if koyulacak.endswith(".app") else hedef_exe)
         baslik(f"Hazır! ({time.monotonic() - bas:.0f} sn, {boyut:.1f} MB)")
         yaz(f"  {hedef_exe}")
-        if ayar.get("klasorlu"):
+        if koyulacak.endswith(".app"):
+            yaz(f"  Başka bir Mac'e '{ad}.app' paketini kopyala (yalnızca bu tür "
+                f"işlemcili Mac'lerde çalışır).")
+        elif ayar.get("klasorlu"):
             yaz(f"  Başka bilgisayara '{ad}' klasörünün tamamını kopyala.")
+        if sistem == "linux" and pencere == "konsol":
+            yaz("  Linux'ta konsol kipindeki program bir terminalden başlatılmalı "
+                f"(ör. ./{ad}); çift tıklanınca terminal açılmaz.")
         if ayar.get("kaynak"):
-            yaz(f'  Kaynak koduna bakmak için: turkod kaynak "{hedef_exe}"')
+            yaz(f'  Kaynak koduna bakmak için: turkod kaynak "{koyulacak if koyulacak.endswith(".app") else hedef_exe}"')
         return hedef_exe
     finally:
         shutil.rmtree(gecici, ignore_errors=True)
@@ -1031,8 +1230,8 @@ class _Paket:
             f.seek(0, os.SEEK_END)
             boy = f.tell()
             # Paketin sonu dosyanın sonundadır (imzalı EXE'de ardından
-            # yalnızca birkaç KB sertifika gelir).
-            bas = max(0, boy - 1024 * 1024)
+            # yalnızca birkaç KB sertifika gelir; macOS'ta kod imzası birkaç yüz KB).
+            bas = max(0, boy - 4 * 1024 * 1024)
             f.seek(bas)
             kuyruk = f.read()
             yer = kuyruk.rfind(_PAKET_IMZASI)
@@ -1126,14 +1325,22 @@ def _exe_bilgisi(exe_yolu):
                 return paket, None
         except Exception:  # noqa: BLE001
             return None, None
-    ic = os.path.join(os.path.dirname(exe_yolu), "_internal")
-    try:
-        with open(os.path.join(ic, IMZA_DOSYASI), "rb") as f:
-            if _imza_dogru_mu(f.read(64)):
-                return paket, ic
-    except OSError:
-        pass
+    for ic in _ic_klasorleri(exe_yolu):
+        try:
+            with open(os.path.join(ic, IMZA_DOSYASI), "rb") as f:
+                if _imza_dogru_mu(f.read(64)):
+                    return paket, ic
+        except OSError:
+            pass
     return None, None
+
+
+def _app_ici(yol):
+    """macOS .app paketi verildiyse içindeki çalışan dosya (Contents/MacOS/<ad>)."""
+    if os.path.isdir(yol) and yol.rstrip("/\\").endswith(".app"):
+        ad = os.path.splitext(os.path.basename(yol.rstrip("/\\")))[0]
+        return os.path.join(yol, "Contents", "MacOS", ad)
+    return yol
 
 
 def turkod_exe_mi(exe_yolu):
@@ -1155,10 +1362,11 @@ def exe_kaynagi_oku(exe_yolu, zaman_asimi=120):
     """(durum, metin): durum "acik" (metin = TürKod kodu), "gizli",
     "turkod_degil" ya da "hata" (metin = açıklama). EXE çalıştırılmaz.
     (zaman_asimi eski çağıranlar için duruyor; kullanılmıyor.)"""
-    exe_yolu = os.path.abspath(os.path.expanduser(exe_yolu))
+    exe_yolu = _app_ici(os.path.abspath(os.path.expanduser(exe_yolu)))
     if not os.path.isfile(exe_yolu):
         return "hata", f"Dosya bulunamadı: {exe_yolu}"
-    if not exe_yolu.lower().endswith(".exe"):
+    # Windows'ta yalnızca .exe; Linux/macOS'ta program dosyasının uzantısı yoktur.
+    if platform_katmani.windows_mu() and not exe_yolu.lower().endswith(".exe"):
         return "turkod_degil", "Bu dosya TürKod ile yapılmış bir EXE değil."
     paket, ic = _exe_bilgisi(exe_yolu)
     if paket is None:
