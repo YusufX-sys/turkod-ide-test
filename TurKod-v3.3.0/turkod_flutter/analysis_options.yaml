@@ -17,6 +17,9 @@ analyzer:
     - test_bolme_sonrasi/**
     - macos/**
     - linux/**
+    # Dışarıdan alınmış paket kopyaları (ör. webview_windows): kendi kuralları
+    # ve eski SDK kısıtıyla gelir; uygulamanın denetimini durdurmasın.
+    - third_party/**
 
 linter:
   # The lint rules applied to this project can be customized in the

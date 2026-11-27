@@ -2343,9 +2343,9 @@ class _KodiRobotuState extends State<KodiRobotu> with TickerProviderStateMixin {
               child: Transform(
                 alignment: Alignment.bottomCenter,
                 transform: Matrix4.identity()
-                  ..translate(0.0, d.dy * widget.boy)
+                  ..translateByDouble(0.0, d.dy * widget.boy, 0.0, 1.0)
                   ..rotateZ(d.donus)
-                  ..scale(d.sx, d.sy),
+                  ..scaleByDouble(d.sx, d.sy, 1.0, 1.0),
                 child: cizim,
               ),
             );

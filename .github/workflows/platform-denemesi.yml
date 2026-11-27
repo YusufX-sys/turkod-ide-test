@@ -79,7 +79,9 @@ jobs:
         working-directory: TurKod-v3.3.0/turkod_flutter
         run: |
           flutter pub get
-          flutter analyze
+          # Hata ve uyarılar durdurur; biçim notları (info: eski API, const ...)
+          # durdurmaz (yeni Flutter'da info da varsayılan olarak hata sayılıyor).
+          flutter analyze --no-fatal-infos
       - name: Flutter test
         if: runner.os != 'Windows'
         working-directory: TurKod-v3.3.0/turkod_flutter

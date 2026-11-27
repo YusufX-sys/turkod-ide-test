@@ -642,7 +642,7 @@ void main() {
     expect(ressam(tester).gecis, 1);
 
     // Düşünürken pencerenin ortasına dönerken de bir anda aynalanmaz.
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(const MaterialApp(
         home: Center(
             child: app.KodiRobotu(ifade: app.KodiIfadesi.dusunceli, solaBak: true))));
     await tester.pump(const Duration(milliseconds: 200));
