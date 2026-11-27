@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:turkod_ide/main.dart' as app;
 import 'package:turkod_ide/markdown_gorunum.dart';
+import 'package:turkod_ide/platform_ayarlari.dart' show kodYaziTipi;
 
 class _AyarlarSahte extends app.SettingsProvider {
   _AyarlarSahte(super.backend);
@@ -104,7 +105,8 @@ print(1)
         .firstWhere((s) => s.text == metin);
     expect(bul('kalın').style!.fontWeight, FontWeight.w700);
     expect(bul('eğik').style!.fontStyle, FontStyle.italic);
-    expect(bul('kod').style!.fontFamily, 'Consolas');
+    // Sistemin kod yazı tipi (Windows Consolas, macOS Menlo, Linux DejaVu Sans Mono).
+    expect(bul('kod').style!.fontFamily, kodYaziTipi());
     expect(bul('sil').style!.decoration, TextDecoration.lineThrough);
     expect(bul('site').style!.decoration, TextDecoration.underline);
     // Alt çizgili tanımlayıcılar italik sanılmaz.

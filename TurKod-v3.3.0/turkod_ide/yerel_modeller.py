@@ -813,6 +813,8 @@ def _pip_komutu(py, hedef, paket):
     return [py, "-m", "pip", "install", "--target", hedef, "--upgrade",
             "--only-binary=:all:", "--no-warn-script-location",
             "--disable-pip-version-check", "--progress-bar", "off",
+            # Bağlantı takılırsa sonsuza dek beklemesin, kopan indirme yeniden denensin.
+            "--retries", "5", "--timeout", "60",
             "--extra-index-url", WHL_INDEKS.format(paket=klasor),
             f"llama-cpp-python=={surum}", *CUDA_KITAPLIKLARI.get(paket, [])]
 

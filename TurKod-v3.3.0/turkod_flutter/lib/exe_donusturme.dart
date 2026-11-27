@@ -24,24 +24,25 @@ class ExeAyarlari {
   /// `"C:\Oyun Klasörü\"` biçimindeki \" kapanış tırnağını kaçırıyor,
   /// sonraki seçenekler klasör adına karışıyordu.
   /// Linux/macOS'ta çift tırnak içinde $ ` " \ kaçırılır (platform_ayarlari).
-  static String _tirnak(String s) => komutSatiriTirnagi(s);
-
+  ///
   /// [dosya]: .trpy dosyasının yolu. Python tarafındaki
-  /// exe_donusturucu.komut_metni ile aynı sırayı üretir.
-  String komut(String dosya) {
-    final k = <String>['turkod', 'exe_yap', _tirnak(dosya)];
-    if (ad.trim().isNotEmpty) k.addAll(['--ad', _tirnak(ad.trim())]);
+  /// exe_donusturucu.komut_metni ile aynı sırayı üretir. [isletim]: tırnak
+  /// kuralının sistemi (verilmezse bu bilgisayarınki; testler için).
+  String komut(String dosya, [Isletim? isletim]) {
+    String tirnak(String s) => komutSatiriTirnagi(s, isletim);
+    final k = <String>['turkod', 'exe_yap', tirnak(dosya)];
+    if (ad.trim().isNotEmpty) k.addAll(['--ad', tirnak(ad.trim())]);
     if (kayitYeri.trim().isNotEmpty) {
-      k.addAll(['--kayit-yeri', _tirnak(kayitYeri.trim())]);
+      k.addAll(['--kayit-yeri', tirnak(kayitYeri.trim())]);
     }
     if (pencere == ExePencere.konsol) k.add('--windows-konsolu');
     if (pencere == ExePencere.yok) k.add('--terminalsiz');
     if (kaynakAcik) k.add('--kaynak-acik');
     if (klasorlu) k.add('--klasorlu');
     if (sondaBekle && pencere == ExePencere.konsol) k.add('--sonda-bekle');
-    if (simge.trim().isNotEmpty) k.addAll(['--simge', _tirnak(simge.trim())]);
+    if (simge.trim().isNotEmpty) k.addAll(['--simge', tirnak(simge.trim())]);
     for (final e in ekler) {
-      k.addAll(['--dosya-ekle', _tirnak(e)]);
+      k.addAll(['--dosya-ekle', tirnak(e)]);
     }
     return k.join(' ');
   }

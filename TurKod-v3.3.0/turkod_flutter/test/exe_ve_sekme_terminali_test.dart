@@ -1,10 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:turkod_ide/main.dart' as app;
+import 'package:turkod_ide/platform_ayarlari.dart' show Isletim;
 
 void main() {
+  // Windows'ta cmd tırnak kuralı; testler her sistemde aynı sonucu versin
+  // diye sistem açıkça verilir (Linux/macOS kuralı aşağıda ayrıca sınanır).
+  const win = Isletim.windows;
   group('EXE paneli komutu', () {
     test('varsayılan seçenekler yalnızca dosyayı yazar', () {
-      expect(app.ExeAyarlari().komut(r'C:\Kod\oyun.trpy'),
+      expect(app.ExeAyarlari().komut(r'C:\Kod\oyun.trpy', win),
           r'turkod exe_yap C:\Kod\oyun.trpy');
     });
 
@@ -21,7 +25,7 @@ void main() {
       // Sıra Python'daki exe_donusturucu.komut_metni ile aynıdır
       // (tests/test_exe_donusturucu.py geri ayrıştırmayı sınar).
       expect(
-          a.komut(r'C:\Kod\uzay oyunu.trpy'),
+          a.komut(r'C:\Kod\uzay oyunu.trpy', win),
           r'turkod exe_yap "C:\Kod\uzay oyunu.trpy" --ad "Uzay Oyunu" '
           r'--kayit-yeri "C:\Oyun Klasörü" --windows-konsolu --kaynak-acik '
           r'--klasorlu --sonda-bekle --simge simge.ico --dosya-ekle resimler '
@@ -31,10 +35,25 @@ void main() {
     test('tırnaklı yolun sonundaki ters eğik çizgi ikilenir', () {
       // "C:\Oyun Klasörü\" yazılırsa \" kapanış tırnağını kaçırıyordu.
       final a = app.ExeAyarlari()..kayitYeri = r'C:\Oyun Klasörü\';
-      expect(a.komut('a.trpy'),
+      expect(a.komut('a.trpy', win),
           r'turkod exe_yap a.trpy --kayit-yeri "C:\Oyun Klasörü\\"');
       final b = app.ExeAyarlari()..kayitYeri = r'D:\';
-      expect(b.komut('a.trpy'), r'turkod exe_yap a.trpy --kayit-yeri D:\');
+      expect(b.komut('a.trpy', win), r'turkod exe_yap a.trpy --kayit-yeri D:\');
+    });
+
+    test('Linux ve macOS kabuğunda çift tırnak; içinde \$ kaçırılır', () {
+      final a = app.ExeAyarlari()
+        ..ad = 'Uzay Oyunu'
+        ..kayitYeri = r'/home/ece/Oyun $Klasör'
+        ..ekler.add('ses dosyası.wav');
+      for (final s in [Isletim.linux, Isletim.macos]) {
+        expect(
+            a.komut('/home/ece/kod/uzay oyunu.trpy', s),
+            r'turkod exe_yap "/home/ece/kod/uzay oyunu.trpy" --ad "Uzay Oyunu" '
+            r'--kayit-yeri "/home/ece/Oyun \$Klasör" --dosya-ekle "ses dosyası.wav"');
+        expect(app.ExeAyarlari().komut('/home/ece/oyun.trpy', s),
+            'turkod exe_yap /home/ece/oyun.trpy');
+      }
     });
 
     test('göreli kayıt klasörü kod dosyasının klasörüne göre gösterilir', () {
