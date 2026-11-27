@@ -83,6 +83,9 @@ Future<void> _surukle(WidgetTester t, List<Offset> noktalar,
 }
 
 Future<void> _dugme(WidgetTester t, String anahtar) async {
+  // Dar pencerede (macOS CI) araç ayarları yana kayar: önce görünür yap.
+  await t.ensureVisible(find.byKey(ValueKey(anahtar)));
+  await _bekle(t, const Duration(milliseconds: 300));
   await t.tap(find.byKey(ValueKey(anahtar)));
   await _bekle(t, const Duration(milliseconds: 500));
 }
