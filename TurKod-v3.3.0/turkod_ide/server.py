@@ -185,10 +185,6 @@ def _cmd_fold_bolgeleri(params):
     return core.fold_bolgeleri_bul(params.get("kod", ""))
 
 
-def _cmd_tokenize(params):
-    return core.tokenize_kod(params.get("kod", ""))
-
-
 def _cmd_syntax_kontrol(params):
     return core.syntax_kontrol(params.get("kod", ""))
 
@@ -203,10 +199,6 @@ def _cmd_tamamlama_onerileri(params):
         params.get("kod", ""),
         params.get("once", ""),
     )
-
-
-def _cmd_kod_tanimlari(params):
-    return core.kod_tanimlari(params.get("kod", ""))
 
 
 def _cmd_kelime_aciklamasi(params):
@@ -284,25 +276,58 @@ def _cmd_ai_baglanti_kes(params):
     return core.ai_baglanti_kes(params.get("saglayici"))
 
 
-def _cmd_ai_model_dogrula(params):
-    return core.model_dogrula()
-
-
 def _cmd_ai_sor(params):
     return core.ai_sor(params.get("mesaj", ""), params.get("kod"))
 
 
 # Kodi köprüsü: TürKod'un ana penceresi ile masaüstü Kodi penceresi (ikinci
 # pencere, ayrı bağlantı) birbirine "kodi_kopru" olayıyla mesaj gönderir.
+# {rol: gönderici}; gönderici(veri) gönderemezse False döndürür ya da hata
+# fırlatır. Göndericinin "ws" özniteliği kaydı yapan bağlantıdır: bağlantı
+# kapanınca o bağlantının kayıtları silinir (bkz. _kodi_kopru_temizle).
 _KODI_KOPRU = {}
+_KODI_KOPRU_SURE = 5
+
+
+def _kodi_kopru_gonderici(ws: WebSocket, loop: asyncio.AbstractEventLoop):
+    """İş parçacığından çağrılır; gönderim bitene kadar bekler, başarıyı
+    bool olarak döndürür (eski gönderici hataları yutuyordu)."""
+    def gonder(data):
+        try:
+            gelecek = asyncio.run_coroutine_threadsafe(
+                ws.send_json({"event": "kodi_kopru", "data": data}), loop)
+            gelecek.result(timeout=_KODI_KOPRU_SURE)
+            return True
+        except Exception:
+            return False
+
+    gonder.ws = ws
+    return gonder
+
+
+def _kodi_kopru_temizle(ws):
+    """Kapanan bağlantıya ait köprü kayıtlarını siler."""
+    for rol, gonder in list(_KODI_KOPRU.items()):
+        if getattr(gonder, "ws", None) is ws:
+            if _KODI_KOPRU.get(rol) is gonder:
+                _KODI_KOPRU.pop(rol, None)
 
 
 def _cmd_kodi_kopru_gonder(params):
-    gonder = _KODI_KOPRU.get(str(params.get("rol") or ""))
+    rol = str(params.get("rol") or "")
+    gonder = _KODI_KOPRU.get(rol)
     if gonder is None:
         return {"ok": False, "hata": "Karşı pencere bağlı değil."}
     veri = params.get("veri")
-    gonder(veri if isinstance(veri, dict) else {})
+    try:
+        basarili = gonder(veri if isinstance(veri, dict) else {}) is not False
+    except Exception:
+        basarili = False
+    if not basarili:
+        # Karşı pencere kapanmış: kayıt silinir (yeniden kaydolursa gelir).
+        if _KODI_KOPRU.get(rol) is gonder:
+            _KODI_KOPRU.pop(rol, None)
+        return {"ok": False, "hata": "Karşı pencere bağlı değil."}
     return {"ok": True}
 
 
@@ -354,14 +379,6 @@ def _cmd_imza_dogrula(params):
 
 def _cmd_dosya_hash(params):
     return core.dosya_hash()
-
-
-def _cmd_breakpoint_toggle(params):
-    return core.breakpoint_toggle(params.get("satir"))
-
-
-def _cmd_breakpoint_list(params):
-    return core.breakpoint_list()
 
 
 def _cmd_debug_adim(params):
@@ -437,11 +454,9 @@ SYNC_COMMANDS = {
     "istatistik": _cmd_istatistik,
     "todo_bul": _cmd_todo_bul,
     "fold_bolgeleri": _cmd_fold_bolgeleri,
-    "tokenize": _cmd_tokenize,
     "syntax_kontrol": _cmd_syntax_kontrol,
     "duzelt_riskleri": _cmd_duzelt_riskleri,
     "tamamlama_onerileri": _cmd_tamamlama_onerileri,
-    "kod_tanimlari": _cmd_kod_tanimlari,
     "tanim_bul": _cmd_tanim_bul,
     "kelime_aciklamasi": _cmd_kelime_aciklamasi,
     "ad_degistir": _cmd_ad_degistir,
@@ -454,7 +469,6 @@ SYNC_COMMANDS = {
     "ai_modelleri": _cmd_ai_modelleri,
     "ai_modelleri_guncelle": _cmd_ai_modelleri_guncelle,
     "ai_baglanti_kes": _cmd_ai_baglanti_kes,
-    "ai_model_dogrula": _cmd_ai_model_dogrula,
     "ai_sor": _cmd_ai_sor,
     "ai_kodu_acikla": _cmd_ai_kodu_acikla,
     "ai_hata_acikla": _cmd_ai_hata_acikla,
@@ -462,11 +476,9 @@ SYNC_COMMANDS = {
     "ai_kodu_optimize": _cmd_ai_kodu_optimize,
     "ai_temizle": _cmd_ai_temizle,
     "kodi_sor": _cmd_kodi_sor,
-    "kodi_durum": lambda params: core.kodi_durum(),
     "kodi_temizle": lambda params: core.kodi_temizle(),
     "kodi_sohbet_yukle": lambda params: core.kodi_sohbet_yukle(params.get("no")),
     "kodi_sohbetler": lambda params: core.kodi_sohbetler(),
-    "kodi_goruntu_dene": lambda params: core.kodi_goruntu_dene(),
     "kodi_kurulum": lambda params: core.kodi_kurulum(params.get("saglayici"), params.get("anahtar")),
     "kodi_sohbet_sil": lambda params: core.kodi_sohbet_sil(params.get("no"), params.get("hepsi")),
     "kodi_sohbet_kaydet": lambda params: core.kodi_sohbet_kaydet(params.get("mesajlar")),
@@ -483,8 +495,6 @@ SYNC_COMMANDS = {
     "exe_kaynagi": _cmd_exe_kaynagi,
     "imza_dogrula": _cmd_imza_dogrula,
     "dosya_hash": _cmd_dosya_hash,
-    "breakpoint_toggle": _cmd_breakpoint_toggle,
-    "breakpoint_list": _cmd_breakpoint_list,
     "debug_adim": _cmd_debug_adim,
     "debug_icine": _cmd_debug_icine,
     "debug_disina": _cmd_debug_disina,
@@ -524,16 +534,11 @@ SYNC_COMMANDS.update({
     "yerel_ai_motor_durumu": lambda params: yerel_modeller.motor_durumu(),
     "yerel_ai_motor_kur": lambda params: yerel_modeller.motor_kur(params.get("tur")),
     "yerel_ai_motor_kaldir": lambda params: yerel_modeller.motor_kaldir(),
-    "yerel_ai_depolama": lambda params: yerel_modeller.depolama_analizi(),
     "yerel_ai_model_dizini": lambda params: core.yerel_ai_model_dizini_ayarla(
         params.get("dizin")),
-    "yerel_ai_gorev_ata": lambda params: core.yerel_ai_gorev_ata(params.get("gorev"),
-                                                                  params.get("model")),
     "ai_hayalet_tamamla": lambda params: core.ai_hayalet_tamamla(
         params.get("once", ""), params.get("sonra", ""), params.get("dosya"),
         bool(params.get("zorla", False))),
-    "ai_tamamla": lambda params: core.ai_tamamla(params.get("once", ""),
-                                                 params.get("sonra", "")),
     "kabuk_penceresi": lambda params: _cmd_kabuk_penceresi(),
 })
 
@@ -543,7 +548,6 @@ SYNC_COMMANDS["surum"] = lambda params: {"ok": True, "surum": updater.mevcut_sur
 SYNC_COMMANDS["terminal_boyutu"] = lambda params: core.terminal_boyutu_ayarla(
     params.get("oturum"), params.get("sutun"), params.get("satir"))
 SYNC_COMMANDS["guncelleme_kontrol"] = lambda params: updater.kontrol_et()
-SYNC_COMMANDS["guncelleme_indir"] = lambda params: updater.indir_ve_dogrula()
 SYNC_COMMANDS["guncelleme_indir_baslat"] = lambda params: updater.indir_baslat()
 SYNC_COMMANDS["guncelleme_indir_durum"] = lambda params: updater.indir_durum()
 SYNC_COMMANDS["guncelleme_kurulum_dogrula"] = \
@@ -558,13 +562,15 @@ SYNC_COMMANDS["guncelleme_uygula"] = \
 # komutlar da kuyrukta bekliyor, arayüz donmuş görünüyordu.
 _UZUN_KOMUTLAR = frozenset({
     "exe_kaynagi",
-    "ai_sor", "kodi_sor", "kodi_kurulum", "kodi_goruntu_dene", "kodi_durum", "kodi_dinle", "kodi_seslendir", "ai_kodu_acikla", "ai_kodu_optimize", "ai_model_dogrula",
-    "ai_modelleri_guncelle", "guncelleme_kontrol",
-    "guncelleme_indir", "guncelleme_indir_baslat",
-    "ai_modelleri", "ai_baglanti_test", "ai_hata_acikla", "ai_tamamla",
+    "ai_sor", "kodi_sor", "kodi_kurulum", "kodi_dinle", "kodi_seslendir",
+    "ai_kodu_acikla", "ai_kodu_optimize",
+    "ai_modelleri_guncelle", "guncelleme_kontrol", "guncelleme_indir_baslat",
+    "ai_modelleri", "ai_baglanti_test", "ai_hata_acikla",
     "ai_hayalet_tamamla",
     "yerel_ai_durum", "yerel_ai_oneriler", "yerel_ai_ara", "yerel_ai_indir",
-    "yerel_ai_sil", "yerel_ai_motor_durumu", "yerel_ai_depolama", "yerel_ai_model_dizini",
+    "yerel_ai_sil", "yerel_ai_motor_durumu", "yerel_ai_model_dizini",
+    # Motor kurulumu / kaldırma dakikalar sürebilir (pip, büyük dosyalar).
+    "yerel_ai_motor_kur", "yerel_ai_motor_kaldir",
 })
 _UZUN_HAVUZ = ThreadPoolExecutor(max_workers=16, thread_name_prefix="turkod-uzun")
 
@@ -655,7 +661,7 @@ async def _cmd_kabuk_baslat(ws: WebSocket, msg_id, params):
 
 async def _cmd_kodi_kopru_kayit(ws: WebSocket, msg_id, params):
     rol = str(params.get("rol") or "")
-    _KODI_KOPRU[rol] = _thread_event_sender(ws, asyncio.get_running_loop(), "kodi_kopru")
+    _KODI_KOPRU[rol] = _kodi_kopru_gonderici(ws, asyncio.get_running_loop())
     await _send_json(ws, {"id": msg_id, "ok": True, "result": {"ok": True}})
 
 
@@ -829,17 +835,18 @@ async def _handle_message(ws: WebSocket, raw: str):
         })
 
 
+# Özel (asenkron) komutlar: _handle_message bunları SYNC_COMMANDS'tan önce
+# kendisi işler. "/" ve "/komutlar" listeleri bu tablolardan üretilir.
+ASYNC_COMMANDS = ("calistir", "duzelt", "terminal_komut", "debug_baslat",
+                  "kabuk_baslat", "kodi_kopru_kayit")
+
+
 @app.get("/")
 def index():
     return {
         "servis": "TürKod Backend",
         "ws": "/ws",
-        "komutlar": sorted(SYNC_COMMANDS.keys()) + ["kabuk_baslat",
-            "calistir",
-            "duzelt",
-            "terminal_komut",
-            "debug_baslat",
-        ],
+        "komutlar": sorted(set(SYNC_COMMANDS) | set(ASYNC_COMMANDS)),
     }
 
 
@@ -847,7 +854,7 @@ def index():
 def komutlar():
     return {
         "sync": sorted(SYNC_COMMANDS.keys()),
-        "async": ["calistir", "duzelt", "terminal_komut", "debug_baslat", "kabuk_baslat"],
+        "async": list(ASYNC_COMMANDS),
     }
 
 
@@ -907,6 +914,7 @@ async def websocket_endpoint(ws: WebSocket):
         for t in tasks:
             if not t.done():
                 t.cancel()
+        _kodi_kopru_temizle(ws)
         # Arayüz bağlantı kopunca programı sonlandırılmış sayar; burada da
         # durdurulur. Eskiden program sahipsiz kalıyor, akış kontrolünde
         # onay gelmediği için çıktı yazarken sonsuza dek askıda kalıyordu.

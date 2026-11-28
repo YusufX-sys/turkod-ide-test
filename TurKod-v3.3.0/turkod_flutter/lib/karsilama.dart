@@ -3,15 +3,20 @@
 
 part of 'main.dart';
 
-/// Karşılama ekranındaki ipuçları (her açılışta biri gösterilir).
+/// Karşılama ekranındaki ipuçları (her açılışta biri gösterilir). {eylem.kimliği}
+/// o eylemin şu anki kısayoluyla değişir (kisayolluIpucuMetni): kullanıcı
+/// kısayolu değiştirince ipucu da değişir. Yer tutucuya ek getirilmez.
 const List<String> kKarsilamaIpuclari = [
-  'Kodunu çalıştırmak için Ctrl+R\'ye bas; sonuç aşağıdaki terminalde görünür.',
-  'Bir komutun nerede olduğunu unuttun mu? Ctrl+Shift+P ile Komut Paleti\'ni aç ve adını yaz.',
+  'Kodunu çalıştırmak için şu tuşlara bas: {run.run}. Sonuç aşağıdaki terminalde görünür.',
+  'Bir komutun nerede olduğunu unuttun mu? Komut Paleti\'ni aç ({view.palette}) ve adını yaz.',
   'Hatalı kodda Akıllı Düzelt (sihirli değnek) hataları senin için bulur ve düzeltir.',
-  'Satır numarasına tıklayınca kesme noktası koyarsın; F5 ile programı adım adım izlersin.',
+  'Satır numarasına tıklayınca kesme noktası koyarsın; programı adım adım izlemek için '
+      'Hata Ayıkla\'yı başlat ({run.debug_start}).',
   'Yorumuna "# YAPILACAK:" yaz, Araçlar → Yapılacaklar Listesi\'nde hepsini gör.',
-  'F12 ile bir fonksiyonun tanımlandığı satıra atlarsın; F2 ile adını her yerde değiştirirsin.',
-  'Ctrl+Alt+Aşağı ile alttaki satıra ikinci bir imleç ekler, iki satıra birden yazarsın.',
+  'Tanıma Git ({edit.goto_definition}) seni bir fonksiyonun yazıldığı satıra götürür; '
+      'Adı Değiştir ({edit.rename}) adını her yerde değiştirir.',
+  'Alta İmleç Ekle ({edit.cursor_below}) ile alttaki satıra ikinci bir imleç koyar, '
+      'iki satıra birden yazarsın.',
   'Çalıştır → EXE\'ye Dönüştür ile oyununu arkadaşlarının bilgisayarında da çalıştırabilirsin.',
 ];
 
@@ -56,7 +61,10 @@ class KarsilamaEkrani extends StatelessWidget {
     // "Uygulamaya Dönüştür".
     final ipuclari = [
       for (final i in kKarsilamaIpuclari)
-        kisayolluMetin(i.replaceAll("EXE'ye Dönüştür", exeDonusturEtiketi().replaceAll('…', ''))),
+        if (kisayolluIpucuMetni(kisayolluMetin(i.replaceAll(
+                "EXE'ye Dönüştür", exeDonusturEtiketi().replaceAll('…', ''))))
+            case final m?)
+          m,
     ];
     final ipucu = ipuclari[DateTime.now().day % ipuclari.length];
 

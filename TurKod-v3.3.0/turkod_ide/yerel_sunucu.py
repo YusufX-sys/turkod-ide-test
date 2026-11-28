@@ -298,16 +298,70 @@ def model_al(ad):
         return llm
 
 
+class GecersizParametre(Exception):
+    """İstekteki bir parametre geçersiz (400 invalid parameter)."""
+
+
+def _sayi(ad, deger, tur):
+    if isinstance(deger, bool):
+        raise GecersizParametre(f"invalid parameter '{ad}': {deger!r}")
+    try:
+        return tur(deger)
+    except (TypeError, ValueError):
+        raise GecersizParametre(f"invalid parameter '{ad}': {deger!r}") from None
+
+
 def _ortak(govde):
     kw = {}
+    ad = "max_tokens" if govde.get("max_tokens") else "max_completion_tokens"
     max_token = govde.get("max_tokens") or govde.get("max_completion_tokens")
     if max_token:
-        kw["max_tokens"] = int(max_token)
+        kw["max_tokens"] = _sayi(ad, max_token, int)
+        if kw["max_tokens"] < 0:
+            raise GecersizParametre(f"invalid parameter '{ad}': {max_token!r}")
     if govde.get("temperature") is not None:
-        kw["temperature"] = float(govde["temperature"])
+        kw["temperature"] = _sayi("temperature", govde["temperature"], float)
     if govde.get("stop"):
-        kw["stop"] = govde["stop"]
+        stop = govde["stop"]
+        if not (isinstance(stop, str) or
+                (isinstance(stop, list) and all(isinstance(s, str) for s in stop))):
+            raise GecersizParametre(f"invalid parameter 'stop': {stop!r}")
+        kw["stop"] = stop
     return kw
+
+
+def _baglam_tasmasi_mi(hata):
+    """llama.cpp'nin bağlam taşması iletisi mi? ("Requested tokens (N) exceed
+    context window of M")"""
+    m = str(hata).lower()
+    return "context window" in m or "context length" in m or \
+        ("exceed" in m and "token" in m)
+
+
+_YEREL_ADLAR = ("127.0.0.1", "localhost", "[::1]")
+
+
+def _yerel_host_mu(deger):
+    """Host başlığı: 127.0.0.1 / localhost / [::1], portlu ya da portsuz."""
+    deger = (deger or "").strip().lower()
+    if not deger:
+        return False
+    for ad in _YEREL_ADLAR:
+        if deger == ad:
+            return True
+        if deger.startswith(ad + ":"):
+            port = deger[len(ad) + 1:]
+            return port.isdigit() and 0 < int(port) < 65536
+    return False
+
+
+def _yerel_origin_mi(deger):
+    """Origin başlığı: http(s)://<yerel host>[:port]. "null" yerel sayılmaz."""
+    deger = (deger or "").strip().lower()
+    for sema in ("http://", "https://"):
+        if deger.startswith(sema):
+            return _yerel_host_mu(deger[len(sema):].rstrip("/"))
+    return False
 
 
 def sohbet(govde):
@@ -345,7 +399,39 @@ class Isleyici(BaseHTTPRequestHandler):
     def _hata(self, kod, mesaj):
         self._yanit(kod, {"error": {"message": mesaj}})
 
+    def _govdeyi_at(self, sinir=1 << 20):
+        """İstek gövdesini (en çok `sinir` bayt) okuyup atar."""
+        try:
+            kalan = min(int(self.headers.get("Content-Length") or 0), sinir)
+        except ValueError:
+            return
+        while kalan > 0:
+            parca = self.rfile.read(min(kalan, 65536))
+            if not parca:
+                break
+            kalan -= len(parca)
+
+    def _izinli_mi(self):
+        """Yalnızca bu bilgisayardaki istemciler: web sayfalarından gelen
+        istekler (yabancı Origin, DNS rebinding ile yabancı Host) reddedilir.
+        Reddedildiyse yanıtı gönderip False döner."""
+        if not (_yerel_host_mu(self.headers.get("Host")) and (
+                self.headers.get("Origin") is None or _yerel_origin_mi(self.headers.get("Origin")))):
+            # Gövde okunmadan bağlantı kapanırsa (Windows) istemci yanıt yerine
+            # "bağlantı sıfırlandı" alabiliyor: reddetmeden önce gövde okunup atılır.
+            self._govdeyi_at()
+        if not _yerel_host_mu(self.headers.get("Host")):
+            self._hata(403, "forbidden host")
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None and not _yerel_origin_mi(origin):
+            self._hata(403, "forbidden origin")
+            return False
+        return True
+
     def do_GET(self):  # noqa: N802
+        if not self._izinli_mi():
+            return
         if self.path.rstrip("/") == "/saglik":
             self._yanit(200, {
                 "ok": True, "surum": getattr(llama_cpp, "__version__", ""),
@@ -358,11 +444,19 @@ class Isleyici(BaseHTTPRequestHandler):
             self._hata(404, "not found")
 
     def do_POST(self):  # noqa: N802
+        if not self._izinli_mi():
+            return
+        tur = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if tur != "application/json":
+            self._govdeyi_at()
+            return self._hata(415, "Content-Type must be application/json")
         try:
             uzunluk = int(self.headers.get("Content-Length") or 0)
             govde = json.loads(self.rfile.read(uzunluk) or b"{}")
         except ValueError:
             return self._hata(400, "invalid json")
+        if not isinstance(govde, dict):
+            return self._hata(400, "invalid json: object expected")
         yol = self.path.rstrip("/")
         try:
             if yol == "/v1/chat/completions":
@@ -372,9 +466,13 @@ class Isleyici(BaseHTTPRequestHandler):
             return self._hata(404, "not found")
         except FileNotFoundError as e:
             return self._hata(404, str(e))
+        except GecersizParametre as e:
+            return self._hata(400, str(e))
         except ValueError as e:
-            # llama.cpp: "Requested tokens exceed context window"
-            return self._hata(400, f"context length exceeded: {e}")
+            # llama.cpp: "Requested tokens (N) exceed context window of M"
+            if _baglam_tasmasi_mi(e):
+                return self._hata(400, f"context length exceeded: {e}")
+            return self._hata(400, f"invalid request: {e}")
         except MemoryError:
             return self._hata(500, "model belleğe sığmadı (out of memory)")
         except Exception as e:  # noqa: BLE001

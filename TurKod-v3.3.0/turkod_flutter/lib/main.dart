@@ -645,7 +645,14 @@ class BackendService {
               ? Map<String, dynamic>.from(msg['result'] as Map)
               : {});
         } else {
-          c.completeError(BackendException(_extractError(msg, komut), data: msg));
+          // data: komutun kendi sonucu ({"kalici_gerekir": true, "iptal": true,
+          // "anahtar_yok": true ...}). Eskiden bütün zarf veriliyordu, bu yüzden
+          // e.data?['alan'] hep null geliyordu ve bu dallar hiç çalışmıyordu.
+          final sonuc = msg['result'];
+          c.completeError(BackendException(_extractError(msg, komut),
+              data: sonuc is Map
+                  ? Map<String, dynamic>.from(sonuc)
+                  : Map<String, dynamic>.from(msg)));
         }
       }
     } catch (_) {}
@@ -710,6 +717,21 @@ class BackendService {
       _reconnectTimer = null;
       connect();
     });
+  }
+
+  /// [call] gibi, ama komut "olmadı" ({"ok": false, ...}) derse istisna yerine
+  /// sonucun kendisini döndürür: çağıran `r['ok'] != true` diye bakıp sunucunun
+  /// ek alanlarını (anahtar_yok, model_yok, hata ...) okuyabilir. Bağlantı
+  /// kopması gibi gerçek hatalar yine istisna fırlatır.
+  Future<Map<String, dynamic>> callSonuc(String command,
+      [Map<String, dynamic> params = const {}]) async {
+    try {
+      return await call(command, params);
+    } on BackendException catch (e) {
+      final d = e.data;
+      if (d != null && d.containsKey('ok')) return d;
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> call(String command,
@@ -5479,7 +5501,7 @@ class _FixResultDialogState extends State<_FixResultDialog> {
             value: value / 100,
             minHeight: 6,
             color: c,
-            backgroundColor: c.withOpacity(0.18),
+            backgroundColor: c.withValues(alpha: 0.18),
           ),
         ),
       ]),
@@ -5506,7 +5528,7 @@ class _FixResultDialogState extends State<_FixResultDialog> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(6),
         border: Border(left: BorderSide(color: _scoreColor(f.confidence), width: 3)),
       ),
@@ -5602,7 +5624,7 @@ class _FixResultDialogState extends State<_FixResultDialog> {
           '${(rep.durationMs / 1000).toStringAsFixed(1)} sn • '
           '${rep.runs} test çalıştırması',
           style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6)),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
         ),
         if (rep.fixes.isNotEmpty) ...[
           _sectionTitle(theme, 'Yaptığım düzeltmeler (${rep.fixes.length})'),
@@ -5656,7 +5678,7 @@ class _FixResultDialogState extends State<_FixResultDialog> {
             width: double.infinity,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(4),
             ),
             child: SelectableText.rich(TextSpan(children: [
@@ -5839,6 +5861,9 @@ class OzelKisayollar {
     'Home': LogicalKeyboardKey.home,
     'End': LogicalKeyboardKey.end,
     '/': LogicalKeyboardKey.slash,
+    // "+" kısayol metninde ayraç olduğu için adıyla yazılır (eskiden "Ctrl++"
+    // olarak kaydediliyor, geri okunamadığı için kısayol hiç çalışmıyordu).
+    'Plus': LogicalKeyboardKey.add,
   };
 
   static String tusAdi(LogicalKeyboardKey k) {
@@ -5846,6 +5871,9 @@ class OzelKisayollar {
       if (e.value == k) return e.key;
     }
     final etiket = k.keyLabel;
+    if (etiket == '+') return 'Plus';
+    // "ı" büyütülünce "I" olur ve i tuşuyla karışır: olduğu gibi kalır.
+    if (etiket == 'ı') return etiket;
     return etiket.length == 1 ? etiket.toUpperCase() : etiket;
   }
 
@@ -5864,6 +5892,7 @@ class OzelKisayollar {
     'Arrow Right': 'Sağ',
     'Page Up': 'Sayfa Yukarı',
     'Page Down': 'Sayfa Aşağı',
+    'Plus': '+',
   };
 
   /// Menüde ve listelerde gösterilen kısayol: "Ctrl+Alt+Down" ->
@@ -5894,6 +5923,18 @@ class OzelKisayollar {
           break;
         }
       }
+    }
+    // Türkçe harfler (Ş, Ğ, Ü, Ç, Ö, ı) Flutter'ın bilinen tuş listesinde yok;
+    // yazdırılabilir karakterlerin tuş kimliği küçük harfin kod noktasıdır.
+    // Eskiden çözülemiyor, "Ctrl+Ş" atanınca kısayol sessizce kayboluyordu.
+    if (tus == null && tusMetni.runes.length == 1) {
+      final kucuk = switch (tusMetni) {
+        'İ' => 'i',
+        'I' => 'i',
+        'ı' => 'ı',
+        _ => tusMetni.toLowerCase(),
+      };
+      tus = LogicalKeyboardKey(kucuk.runes.first);
     }
     if (tus == null) return null;
     final m = parcalar.map((p) => p.toLowerCase()).toSet();
@@ -5970,6 +6011,34 @@ String kisayolluIpucu(String etiket, String eylemId) {
   return k.isEmpty ? etiket : '$etiket (${OzelKisayollar.goster(k)})';
 }
 
+/// Metindeki {eylem.kimliği} yer tutucularını o eylemin şu anki kısayoluyla
+/// değiştirir; eskiden ipuçları kullanıcı kısayolu değiştirse de hep varsayılanı
+/// ("Ctrl+R") yazıyordu. Metinler yer tutucuya ek gelmeyecek biçimde yazılır
+/// (tuş değişince "'ye / 'ya" uyumu bozulmasın). Kısayolu kaldırılmış eylemde
+/// " ({kimlik})" biçimindeki parantez silinir; başka biçimde geçiyorsa null
+/// döner (o ipucu gösterilmez).
+String? kisayolluIpucuMetni(String metin) {
+  if (!metin.contains('{')) return metin;
+  if (_guncelKisayollar == null || _guncelKisayolSurumu != OzelKisayollar.surum) {
+    _guncelKisayollar = {for (final a in buildAppActions()) a.id: a.shortcut};
+    _guncelKisayolSurumu = OzelKisayollar.surum;
+  }
+  var eksik = false;
+  final sonuc = metin.replaceAllMapped(
+      RegExp(r'( \()?\{([a-z_]+\.[a-z_]+)\}(\))?'), (m) {
+    final k = _guncelKisayollar![m[2]!] ?? '';
+    final parantezli = m[1] != null && m[3] != null;
+    if (k.isEmpty) {
+      if (parantezli) return '';
+      eksik = true;
+      return '';
+    }
+    final g = OzelKisayollar.goster(k);
+    return parantezli ? ' ($g)' : '${m[1] ?? ''}$g${m[3] ?? ''}';
+  });
+  return eksik ? null : sonuc;
+}
+
 /// Kısayolları değiştirme penceresi.
 Future<void> kisayolPenceresiniAc(BuildContext context) =>
     showDialog(context: context, builder: (_) => const KisayolDialog());
@@ -5985,9 +6054,23 @@ class _KisayolDialogState extends State<KisayolDialog> {
   late Map<String, String> _tablo = Map.of(OzelKisayollar.tablo);
   String _filtre = '';
 
+  /// Düzenleyicinin kendi kısayolu (Geri Al, Kes, Kopyala ...): metni var ama
+  /// tetikleyicisi yok, tuşu editör kendisi işler. Bunlar değiştirilemez;
+  /// eskiden pencerede "—" görünüyor, aynı tuş başka işe uyarısız atanabiliyordu.
+  bool _duzenleyiciKisayolu(AppAction a) =>
+      a.activator == null && a.shortcut.isNotEmpty && !_tablo.containsKey(a.id);
+
   String _gecerli(AppAction a) => _tablo.containsKey(a.id)
       ? _tablo[a.id]!
-      : (a.activator == null ? '' : OzelKisayollar.metin(a.activator!));
+      : (a.activator != null
+          ? OzelKisayollar.metin(a.activator!)
+          : a.shortcut);
+
+  /// Karşılaştırma için tek biçim ("Cmd+Shift+Z" ile "Shift+Cmd+Z" aynı).
+  static String _normal(String k) {
+    final a = OzelKisayollar.coz(k);
+    return a == null ? k : OzelKisayollar.metin(a);
+  }
 
   Future<void> _kaydet() async {
     OzelKisayollar.ayarla(_tablo);
@@ -5998,8 +6081,34 @@ class _KisayolDialogState extends State<KisayolDialog> {
     final yeni = await showDialog<String>(
         context: context, builder: (_) => _TusYakalaDialog(eylem: a.label));
     if (yeni == null || !mounted) return;
+    final ayrilmis = _varsayilan.values
+        .where((b) =>
+            b.id != a.id &&
+            yeni.isNotEmpty &&
+            _duzenleyiciKisayolu(b) &&
+            _normal(_gecerli(b)) == _normal(yeni))
+        .toList();
+    if (ayrilmis.isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Bu tuş ayrılmış'),
+          content: Text('${OzelKisayollar.goster(yeni)} düzenleyicide '
+              "'${ayrilmis.first.label}' için kullanılıyor. Başka bir tuş seçin."),
+          actions: [
+            FilledButton(
+                onPressed: () => Navigator.pop(c), child: const Text('Tamam')),
+          ],
+        ),
+      );
+      return;
+    }
     final cakisan = _varsayilan.values
-        .where((b) => b.id != a.id && yeni.isNotEmpty && _gecerli(b) == yeni)
+        .where((b) =>
+            b.id != a.id &&
+            yeni.isNotEmpty &&
+            !_duzenleyiciKisayolu(b) &&
+            _normal(_gecerli(b)) == _normal(yeni))
         .toList();
     if (cakisan.isNotEmpty) {
       final devam = await showDialog<bool>(
@@ -6063,6 +6172,7 @@ class _KisayolDialogState extends State<KisayolDialog> {
                 final a = eylemler[i];
                 final ozel = _tablo.containsKey(a.id);
                 final tus = _gecerli(a);
+                final sabit = _duzenleyiciKisayolu(a);
                 return ListTile(
                   dense: true,
                   leading: Icon(a.icon ?? Icons.bolt, size: 18),
@@ -6075,9 +6185,12 @@ class _KisayolDialogState extends State<KisayolDialog> {
                             fontWeight:
                                 ozel ? FontWeight.bold : FontWeight.normal)),
                     IconButton(
-                      tooltip: 'Değiştir',
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      onPressed: () => _degistir(a),
+                      tooltip: sabit
+                          ? 'Düzenleyicinin kendi kısayolu, değiştirilemez'
+                          : 'Değiştir',
+                      icon: Icon(sabit ? Icons.lock_outline : Icons.edit_outlined,
+                          size: 16),
+                      onPressed: sabit ? null : () => _degistir(a),
                     ),
                     IconButton(
                       tooltip: 'Varsayılana döndür',
@@ -6939,6 +7052,7 @@ List<AppAction> _tanimliEylemler() {
       label: 'Kodi ile Konuş',
       menu: 'Yardım',
       icon: Icons.smart_toy_outlined,
+      shortcut: 'F1',
       activator: const SingleActivator(LogicalKeyboardKey.f1),
       run: (c) => c.read<KodiProvider>().degistir(),
     ),
@@ -8338,7 +8452,7 @@ class _ToastHistoryPanel extends StatelessWidget {
                   'Bildirim yok.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               )
@@ -8386,7 +8500,7 @@ class _ToastHistoryPanel extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: theme.colorScheme.onSurface
-                                        .withOpacity(0.55),
+                                        .withValues(alpha: 0.55),
                                   ),
                                 ),
                               ],
@@ -8657,7 +8771,7 @@ class _MenuBar extends StatelessWidget {
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.55))),
+                                  .withValues(alpha: 0.55))),
                     ]),
                   ))
               .toList(),
@@ -9809,7 +9923,7 @@ class _EditorTabsBarState extends State<EditorTabsBar> {
                 mainAxisMargin: 2,
                 crossAxisMargin: 1,
                 interactive: true,
-                thumbColor: theme.colorScheme.onSurface.withOpacity(0.28),
+                thumbColor: theme.colorScheme.onSurface.withValues(alpha: 0.28),
                 child: ReorderableListView.builder(
                   scrollController: _scroll,
                   scrollDirection: Axis.horizontal,
@@ -10157,9 +10271,9 @@ class Minimap extends StatelessWidget {
                   fontSize: 7,
                 ),
                 syntax: syntax ?? AppSyntaxPalette.fallback,
-                textColor: theme.colorScheme.onSurface.withOpacity(0.62),
-                viewColor: theme.colorScheme.primary.withOpacity(0.14),
-                viewBorderColor: theme.colorScheme.primary.withOpacity(0.4),
+                textColor: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                viewColor: theme.colorScheme.primary.withValues(alpha: 0.14),
+                viewBorderColor: theme.colorScheme.primary.withValues(alpha: 0.4),
               ),
             ),
           );
@@ -10334,7 +10448,7 @@ class _FindWidgetState extends State<FindWidget> {
           alignment: Alignment.center,
           margin: const EdgeInsets.only(left: 2),
           decoration: BoxDecoration(
-            color: on ? theme.colorScheme.primary.withOpacity(0.22) : null,
+            color: on ? theme.colorScheme.primary.withValues(alpha: 0.22) : null,
             border: Border.all(
                 color: on
                     ? theme.colorScheme.primary
@@ -12969,10 +13083,10 @@ class _CodeEditorState extends State<CodeEditor> {
             stil: _style().copyWith(
                 height: 1.4,
                 fontStyle: FontStyle.italic,
-                color: theme.colorScheme.onSurface.withOpacity(0.42)),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.42)),
             normalRenk: theme.colorScheme.onSurface,
             zemin: theme.colorScheme.surface,
-            ipucuRengi: theme.colorScheme.primary.withOpacity(0.75),
+            ipucuRengi: theme.colorScheme.primary.withValues(alpha: 0.75),
           ),
         ),
       ),
@@ -13799,8 +13913,8 @@ class _CodeEditorState extends State<CodeEditor> {
                     fontHeight: 1.4,
                     textColor: theme.colorScheme.onSurface,
                     backgroundColor: theme.colorScheme.surface,
-                    selectionColor: theme.colorScheme.primary.withOpacity(0.7),
-                    highlightColor: theme.colorScheme.primary.withOpacity(0.18),
+                    selectionColor: theme.colorScheme.primary.withValues(alpha: 0.7),
+                    highlightColor: theme.colorScheme.primary.withValues(alpha: 0.18),
                     cursorColor: theme.colorScheme.primary,
                   ),
                   // Satır numaraları kapalı olsa bile sütun çizgileri / boşluk
@@ -13901,7 +14015,7 @@ class _CodeEditorState extends State<CodeEditor> {
                                     color: theme.brightness == Brightness.light
                                         ? const Color(0xFF4B5563)
                                         : theme.colorScheme.onSurface
-                                            .withOpacity(0.72),
+                                            .withValues(alpha: 0.72),
                                   ),
                                 ),
                               ],
@@ -13961,7 +14075,7 @@ class _CodeEditorState extends State<CodeEditor> {
                           painter: _DebugLinePainter(
                             bridge: _paragraphs,
                             line: viewErrorLine,
-                            color: Colors.redAccent.withOpacity(0.13),
+                            color: Colors.redAccent.withValues(alpha: 0.13),
                           ),
                         ),
                       ),
@@ -13973,7 +14087,7 @@ class _CodeEditorState extends State<CodeEditor> {
                           painter: _DebugLinePainter(
                             bridge: _paragraphs,
                             line: viewPausedLine,
-                            color: Colors.amber.withOpacity(0.16),
+                            color: Colors.amber.withValues(alpha: 0.16),
                           ),
                         ),
                       ),
@@ -13992,11 +14106,11 @@ class _CodeEditorState extends State<CodeEditor> {
                               indentUnit: _indentUnit,
                               spaceWidth: _spaceWidth,
                               guideColor: theme.colorScheme.onSurface
-                                  .withOpacity(0.13),
+                                  .withValues(alpha: 0.13),
                               activeGuideColor: theme.colorScheme.onSurface
-                                  .withOpacity(0.38),
+                                  .withValues(alpha: 0.38),
                               whitespaceColor: theme.colorScheme.onSurface
-                                  .withOpacity(0.30),
+                                  .withValues(alpha: 0.30),
                             ),
                           ),
                         ),
@@ -14039,7 +14153,7 @@ class _CodeEditorState extends State<CodeEditor> {
                                   child: Container(
                                     color: selected
                                         ? theme.colorScheme.primary
-                                            .withOpacity(0.25)
+                                            .withValues(alpha: 0.25)
                                         : Colors.transparent,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
@@ -14116,7 +14230,7 @@ class _DebugLinePainter extends CustomPainter {
         );
         canvas.drawRect(
           Rect.fromLTWH(0, p.top, 3, p.height),
-          Paint()..color = color.withOpacity(1),
+          Paint()..color = color.withValues(alpha: 1),
         );
         break;
       }
@@ -14203,7 +14317,7 @@ class _DebugPanelState extends State<DebugPanel> {
           ),
         ),
         _btn(Icons.close, 'İzlemeden kaldır',
-            theme.colorScheme.onSurface.withOpacity(0.6),
+            theme.colorScheme.onSurface.withValues(alpha: 0.6),
             () => bp.removeWatch(w.expr)),
       ]),
     );
@@ -14258,7 +14372,7 @@ class _DebugPanelState extends State<DebugPanel> {
                       text: '  ${v.type}${v.length != null ? ' (${v.length})' : ''}',
                       style: mono.copyWith(
                           fontSize: 10.5,
-                          color: theme.colorScheme.onSurface.withOpacity(0.55))),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.55))),
                   TextSpan(text: ' = ', style: mono),
                   TextSpan(text: v.value, style: mono),
                 ]),
@@ -14314,7 +14428,7 @@ class _DebugPanelState extends State<DebugPanel> {
             style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.4,
-                color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
       ),
       ...children,
     ]);
@@ -14480,7 +14594,7 @@ class _DebugPanelState extends State<DebugPanel> {
                           child: Container(
                             width: double.infinity,
                             color: i == bp.selectedFrame
-                                ? theme.colorScheme.primary.withOpacity(0.12)
+                                ? theme.colorScheme.primary.withValues(alpha: 0.12)
                                 : null,
                             padding: const EdgeInsets.fromLTRB(20, 2, 8, 2),
                             child: Text(
@@ -14675,7 +14789,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
             final dar = baslikKisit.maxWidth < 440;
             void kabukPenceresi() => context
                     .read<BackendService>()
-                    .call('kabuk_penceresi')
+                    .callSonuc('kabuk_penceresi')
                     .then((r) {
                   if (r['ok'] != true && context.mounted) {
                     showAppSnackbar(context, kabukPenceresiHataMetni(r['hata']),
@@ -14726,7 +14840,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                       }(),
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                     ),
                   ),
                 ),
@@ -15017,11 +15131,11 @@ class AiChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.role == AiRole.user;
     final theme = Theme.of(context);
-    final soluk = theme.colorScheme.onSurface.withOpacity(0.6);
+    final soluk = theme.colorScheme.onSurface.withValues(alpha: 0.6);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isUser ? theme.colorScheme.primary.withOpacity(0.06) : null,
+        color: isUser ? theme.colorScheme.primary.withValues(alpha: 0.06) : null,
         border: Border(
           bottom: BorderSide(color: theme.colorScheme.outlineVariant, width: 1),
         ),
@@ -15046,7 +15160,7 @@ class AiChatBubble extends StatelessWidget {
             Flexible(
               child: Text(message.kaynak,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10, color: soluk.withOpacity(0.45))),
+                  style: TextStyle(fontSize: 10, color: soluk.withValues(alpha: 0.45))),
             ),
           ],
           const Spacer(),
@@ -15087,7 +15201,7 @@ class AiChatBubble extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 10,
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.6))),
+                                  .withValues(alpha: 0.6))),
                       const Spacer(),
                       MouseRegion(
                         cursor: SystemMouseCursors.click,
@@ -15184,7 +15298,7 @@ class _DusunceBolumuState extends State<_DusunceBolumu> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final soluk = theme.colorScheme.onSurface.withOpacity(0.55);
+    final soluk = theme.colorScheme.onSurface.withValues(alpha: 0.55);
     final kelime = widget.metin.split(RegExp(r'\s+')).where((k) => k.isNotEmpty).length;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -15255,14 +15369,14 @@ class _AiHintChip extends StatelessWidget {
                 size: 13,
                 color: enabled
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.35)),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.35)),
             const SizedBox(width: 5),
             Text(label,
                 style: TextStyle(
                     fontSize: 11.5,
                     color: enabled
                         ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurface.withOpacity(0.35))),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.35))),
           ]),
         ),
       ),
@@ -15424,7 +15538,7 @@ class _AiPanelState extends State<AiPanel> {
                       children: [
                         Icon(Icons.auto_awesome,
                             size: 32,
-                            color: theme.colorScheme.primary.withOpacity(0.7)),
+                            color: theme.colorScheme.primary.withValues(alpha: 0.7)),
                         const SizedBox(height: 12),
                         Text('AI Asistanına Hoş Geldin',
                             textAlign: TextAlign.center,
@@ -15441,7 +15555,7 @@ class _AiPanelState extends State<AiPanel> {
                           style: TextStyle(
                               fontSize: 12,
                               color:
-                                  theme.colorScheme.onSurface.withOpacity(0.6)),
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                         ),
                         const SizedBox(height: 14),
                         Wrap(
@@ -16090,7 +16204,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'çalıştırır, eklentileri açar, ayarları değiştirir. Neleri yapabileceğini '
         'buradan seçersin; bu bölümü yalnızca sen değiştirebilirsin, Kodi değiştiremez.',
         style: TextStyle(
-            fontSize: 11.5, color: theme.colorScheme.onSurface.withOpacity(0.65)),
+            fontSize: 11.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
       ),
       satir(kKodiYetkiAyar, 'Ayarları değiştirebilsin',
           'Tema, yazı boyutu, editör seçenekleri, yapay zekâ görevlerinin modelleri ...'),
@@ -16175,7 +16289,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'Açıkken Kodi\'ye yazdığın her mesajla görüntü de yapay zekâya gider; Kodi ekranda '
         'ne olduğunu görür. Yalnızca görüntü görebilen modellerle çalışır. Ekranda özel bir şey '
         'varken kapat. Kodi\'nin balonundaki kamera düğmesiyle de açılıp kapanır.',
-        style: TextStyle(fontSize: 11.5, color: theme.colorScheme.onSurface.withOpacity(0.65)),
+        style: TextStyle(fontSize: 11.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
       ),
       Align(
         alignment: Alignment.centerLeft,
@@ -16465,7 +16579,7 @@ class _SettingsPageState extends State<SettingsPage> {
         Text('Henüz bağlı sağlayıcı yok. Aşağıdan bir sağlayıcı seçip API anahtarını '
             'girerek bağla; istediğin kadar sağlayıcı bağlayabilirsin.',
             style: TextStyle(
-                fontSize: 11.5, color: theme.colorScheme.onSurface.withOpacity(0.65))),
+                fontSize: 11.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.65))),
       for (final id in ids)
         Container(
           margin: const EdgeInsets.only(bottom: 4),
@@ -16486,7 +16600,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     '${s.aiAnahtari(id).isNotEmpty ? 'API anahtarı kayıtlı' : 'Anahtarsız'} · '
                     '${s.aiBulutModelleri.where((a) => a.saglayici == id).length} model listede',
                     style: TextStyle(
-                        fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                        fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
               ]),
             ),
             TextButton.icon(
@@ -16548,7 +16662,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(
                       fontSize: 11,
                       color: s.atamaHazir(a)
-                          ? theme.colorScheme.onSurface.withOpacity(0.6)
+                          ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
                           : theme.colorScheme.error)),
             ]),
           ),
@@ -16578,7 +16692,7 @@ class _SettingsPageState extends State<SettingsPage> {
             'Henüz model yok. Aşağıdan bir sağlayıcı ve model ekle ya da '
             'Eklenti Özellikleri → Yerel AI Modelleri\'nden ücretsiz bir model indir.',
             style: TextStyle(
-                fontSize: 11.5, color: theme.colorScheme.onSurface.withOpacity(0.65))),
+                fontSize: 11.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.65))),
       for (final a in modeller) satir(a),
       Align(
         alignment: Alignment.centerLeft,
@@ -16632,7 +16746,7 @@ class _SettingsPageState extends State<SettingsPage> {
   List<Widget> _entegrasyonSatirlari(ThemeData theme) {
     final d = _entegrasyon;
     final notStili = TextStyle(
-        fontSize: 10.5, color: theme.colorScheme.onSurface.withOpacity(0.55));
+        fontSize: 10.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.55));
     if (d == null) {
       return [
         const Align(
@@ -16912,7 +17026,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                           style: TextStyle(
                                               fontSize: 10.5,
                                               color: theme.colorScheme.onSurface
-                                                  .withOpacity(0.55)),
+                                                  .withValues(alpha: 0.55)),
                                         ),
                                       ),
                                     ]),
@@ -17055,7 +17169,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 style: TextStyle(
                                     fontSize: 10.5,
                                     color: theme.colorScheme.onSurface
-                                        .withOpacity(0.55)),
+                                        .withValues(alpha: 0.55)),
                               ),
                             ]),
                       ]),
@@ -17097,7 +17211,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           'Model" biçimindedir; seçim hemen uygulanır.',
                           style: TextStyle(
                               fontSize: 11.5,
-                              color: theme.colorScheme.onSurface.withOpacity(0.65)),
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
                         ),
                         for (final g in kAiGorevleri.entries)
                           _gorevSatiri(settings, g.key, g.value),
@@ -17198,7 +17312,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       'gösteriliyor. "Modelleri Güncelle" ile yeniden dene.',
                           style: TextStyle(
                               fontSize: 10.5,
-                              color: theme.colorScheme.onSurface.withOpacity(0.55)),
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
                         ),
                         if (_sag == 'ozel')
                           TextField(
@@ -17340,7 +17454,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           style: TextStyle(
                               fontSize: 11.5,
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.65)),
+                                  .withValues(alpha: 0.65)),
                         ),
                         TextField(
                           controller: _duzeltmeZamanAsimi,
@@ -17377,16 +17491,25 @@ class _SettingsPageState extends State<SettingsPage> {
 // DİALOGLAR
 // ============================================================================
 
-class StatsDialog extends StatelessWidget {
+class StatsDialog extends StatefulWidget {
   const StatsDialog({super.key});
   @override
+  State<StatsDialog> createState() => _StatsDialogState();
+}
+
+class _StatsDialogState extends State<StatsDialog> {
+  // İstek bir kez gönderilir; eskiden build içindeydi, pencere her yeniden
+  // çizildiğinde (ör. boyut değişince) sunucuya yeni istek gidiyordu.
+  late final Future<Map<String, dynamic>> _istek = context
+      .read<BackendService>()
+      .call('istatistik', {'kod': context.read<EditorProvider>().activeContent.value});
+
+  @override
   Widget build(BuildContext context) {
-    final backend = context.read<BackendService>();
-    final kod = context.read<EditorProvider>().activeContent.value;
     return AlertDialog(
       title: const Text('Kod İstatistikleri'),
       content: FutureBuilder<Map<String, dynamic>>(
-        future: backend.call('istatistik', {'kod': kod}),
+        future: _istek,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(
@@ -17901,6 +18024,9 @@ class _YanEditorState extends State<YanEditor> {
                   style: re.CodeEditorStyle(
                     fontSize: boyut,
                     fontFamily: font,
+                    // Seçilen yazı tipi bu sistemde yoksa (Linux/macOS'ta Consolas)
+                    // ana editördeki gibi eş genişlikli yedeğe düşülür.
+                    fontFamilyFallback: kMonoFontFallback,
                     fontHeight: 1.4,
                     textColor: theme.colorScheme.onSurface,
                     backgroundColor: theme.colorScheme.surface,
@@ -17915,6 +18041,7 @@ class _YanEditorState extends State<YanEditor> {
                     notifier: notifier,
                     textStyle: TextStyle(
                       fontFamily: font,
+                      fontFamilyFallback: kMonoFontFallback,
                       fontSize: boyut,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
@@ -18198,16 +18325,25 @@ class _DosyalardaAraDialogState extends State<DosyalardaAraDialog> {
   }
 }
 
-class TodoDialog extends StatelessWidget {
+class TodoDialog extends StatefulWidget {
   const TodoDialog({super.key});
   @override
+  State<TodoDialog> createState() => _TodoDialogState();
+}
+
+class _TodoDialogState extends State<TodoDialog> {
+  // İstek bir kez gönderilir; eskiden build içindeydi, pencere her yeniden
+  // çizildiğinde (ör. boyut değişince) sunucuya yeni istek gidiyordu.
+  late final Future<Map<String, dynamic>> _istek = context
+      .read<BackendService>()
+      .call('todo_bul', {'kod': context.read<EditorProvider>().activeContent.value});
+
+  @override
   Widget build(BuildContext context) {
-    final backend = context.read<BackendService>();
-    final kod = context.read<EditorProvider>().activeContent.value;
     return AlertDialog(
       title: const Text('Yapılacaklar (YAPILACAK / TODO)'),
       content: FutureBuilder<Map<String, dynamic>>(
-        future: backend.call('todo_bul', {'kod': kod}),
+        future: _istek,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(
@@ -18512,7 +18648,7 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.55))),
+                              .withValues(alpha: 0.55))),
                   // Eylem, paletin kapanan bağlamında değil çağıranın
                   // bağlamında çalıştırılır (bkz. view.palette). Eskiden
                   // palet bağlamı bir süre sonra geçersiz kaldığından
@@ -18609,19 +18745,19 @@ class StatusBar extends StatelessWidget {
           Text('Satır ${ui.cursorLine}, Sütun ${ui.cursorColumn + 1}',
               style: TextStyle(
                   fontSize: 11,
-                  color: theme.colorScheme.onSurface.withOpacity(0.8))),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8))),
           const SizedBox(width: 12),
         ],
         Text(ed.activeTab?.name ?? 'Dosya Yok',
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 fontSize: 11,
-                color: theme.colorScheme.onSurface.withOpacity(0.8))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.8))),
         const SizedBox(width: 12),
         Text('UTF-8',
             style: TextStyle(
                 fontSize: 11,
-                color: theme.colorScheme.onSurface.withOpacity(0.8))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.8))),
         const SizedBox(width: 8),
         for (final id in statusIds)
           Builder(builder: (c) {
@@ -19028,6 +19164,8 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<AppExitResponse> _cikisIstendi() async {
+    // PDF'e yazılmakta olan not ve son çizgi kaybolmasın (çıkışta dispose yok).
+    PdfNotDefteri.hepsiniKaydet();
     if (!mounted) return AppExitResponse.exit;
     final ed = context.read<EditorProvider>();
     final kirli = ed.tabs
@@ -19456,6 +19594,8 @@ class _HomeShellState extends State<HomeShell> {
 List<String> kAcilisDosyalari = const [];
 
 void main(List<String> args) {
+  // Tanıtım turundaki kısayollar kullanıcının şu anki tuşlarıyla yazılır.
+  turKisayolCevirici = (m) => kisayolluIpucuMetni(m) ?? m;
   // Masaüstü Kodi penceresi: aynı programın küçük, saydam ikinci penceresi.
   if (args.contains('--kodi-penceresi')) {
     WidgetsFlutterBinding.ensureInitialized();

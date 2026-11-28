@@ -199,6 +199,16 @@ def main():
     from turkod_ide.surec_izleyici import ebeveyni_izle
     ebeveyni_izle(ebeveyn, _temizle)
 
+    # Tamamlanmış güncellemelerden kalan kurulum dosyaları silinir (yer kaplamasın).
+    def _kurulum_dosyalarini_temizle():
+        try:
+            from turkod_ide import updater
+            updater.eski_kurulumlari_temizle()
+        except Exception as e:
+            print(f"[TurKod] Eski kurulum dosyaları silinemedi: {e}", flush=True)
+    import threading
+    threading.Thread(target=_kurulum_dosyalarini_temizle, daemon=True).start()
+
     # log_config=None: uvicorn'un renkli/isatty tabanlı logger kurulumunu atlar.
     uvicorn.run(app, host="127.0.0.1", port=port,
                 log_config=None, log_level="warning")

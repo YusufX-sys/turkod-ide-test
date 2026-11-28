@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:turkod_ide/pdf_notlari.dart';
+import 'package:turkod_ide/platform_ayarlari.dart';
 
 PdfCizgi cizgi(int sayfa, List<Offset> n) =>
     PdfCizgi(sayfa: sayfa, noktalar: n, renk: 0xFFDC2626, kalinlik: 0.01);
@@ -178,8 +179,13 @@ void main() {
     });
 
     test('anahtar büyük / küçük harf ve ayraçtan etkilenmez', () {
-      expect(PdfNotDefteri.pdfAnahtari('/a/B/Kitap.pdf'),
-          PdfNotDefteri.pdfAnahtari('/a/b/kitap.pdf'));
+      expect(PdfNotDefteri.pdfAnahtari('/a/B/Kitap.pdf', Isletim.windows),
+          PdfNotDefteri.pdfAnahtari('/a/b/kitap.pdf', Isletim.windows));
+      expect(PdfNotDefteri.pdfAnahtari('/a/B/Kitap.pdf', Isletim.macos),
+          PdfNotDefteri.pdfAnahtari('/a/b/kitap.pdf', Isletim.macos));
+      // Linux'ta büyük/küçük harf farkı ayrı dosyadır.
+      expect(PdfNotDefteri.pdfAnahtari('/a/B/Kitap.pdf', Isletim.linux),
+          isNot(PdfNotDefteri.pdfAnahtari('/a/b/kitap.pdf', Isletim.linux)));
       expect(PdfNotDefteri.pdfAnahtari('/a/b/kitap.pdf'),
           isNot(PdfNotDefteri.pdfAnahtari('/a/b/kitap2.pdf')));
       expect(PdfNotDefteri.pdfAnahtari('/x.pdf'), matches(RegExp(r'^[0-9a-f]{16}$')));

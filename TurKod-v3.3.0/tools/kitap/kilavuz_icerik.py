@@ -1273,8 +1273,10 @@ SAYFALAR = [
         ("paragraf", "Görünüm → **Klavye Kısayolları…** (ya da Ayarlar'daki düğme) bütün komutları kısayollarıyla "
                      "listeler. Bir komutun yanındaki kaleme bas, istediğin tuş birleşimine bas, **Ata** de. O tuş "
                      "başka bir komutta kullanılıyorsa \"Kısayol kullanımda\" uyarısı çıkar. **Varsayılana "
-                     "döndür** tek komutu, **Tümünü Sıfırla** hepsini eski hâline getirir. Yeni kısayol menülerde "
-                     "ve araç çubuğunda da görünür."),
+                     "döndür** tek komutu, **Tümünü Sıfırla** hepsini eski hâline getirir. Yeni kısayol menülerde, "
+                     "araç çubuğunda ve karşılama ekranındaki ipuçlarında da görünür. `Ş`, `Ğ`, `Ü` gibi Türkçe "
+                     "harfleri de kısayol yapabilirsin. Kilitli komutlar (Kes, Kopyala, Yapıştır, Geri Al ...) "
+                     "editörün kendi tuşlarıdır: onlar değişmez, tuşları da başka bir işe verilemez."),
         ("resim", "klavye_kisayollari.png", "Klavye Kısayolları penceresi: kalemle değiştir, okla varsayılana döndür",
          260),
         ("kutu", "dikkat", "Yorum, satır çoğaltma, satır taşıma, çoklu imleç, `F2`, `F12` gibi kısayollar yalnızca "
@@ -1291,7 +1293,8 @@ SAYFALAR = [
                                  "dosya okuma/yazma, numaralı döngü, sözlük döngüsü, sınıf, hata yakalama, bekleme. "
                                  "**Seçili kodu parçacık yap** ile kendi kalıplarını da eklersin."],
             ["Odak Zamanlayıcı", "Durum çubuğunda 25 dakikalık çalışma saati, sonra 5 dakika mola (her 4 turda 15). "
-                                 "Tıklayınca başlar/duraklar, sağ tıklayınca sıfırlanır."],
+                                 "Tıklayınca başlar/duraklar. Sağ tıklayınca süreyi seçersin (15-60 dakika) ya da "
+                                 "sıfırlarsın."],
             ["Markdown Önizleme", ".md not dosyalarını başlıkları, listeleri ve tablolarıyla süslü gösterir."],
             ["Karalama Defteri", "Kendini kaydeden bir not defteri; **İmlece ekle** ile notunu koda koyar."],
             ["Günün Görevi", "Her gün yeni bir programlama görevi ve ipucu. **Başka görev** ya da **Yeni sekmede "
@@ -1461,7 +1464,10 @@ SAYFALAR = [
         ("paragraf", "TürKod açıldıktan birkaç saniye sonra sessizce yeni bir sürüm çıkmış mı diye bakar. Çıktıysa "
                      "yenilikleriyle birlikte **Yükle** ya da **Atla** diye sorar. İndirilen kurulum dosyası, "
                      "kurulumdan önce iki kez kontrol edilir (dijital imza ve SHA-256 özeti); açık dosyaların da "
-                     "önce kaydedilir."),
+                     "önce kaydedilir. Windows'ta TürKod kapanınca küçük bir pencere çıkar: dolan çubuk eski "
+                     "sürümün kaldırılışını ve yenisinin kuruluşunu gösterir. Bitince TürKod kendiliğinden açılır, "
+                     "kurulum dosyası da silinir. Bir aksilik olursa (elektrik kesilirse bile) eski sürüm yerine "
+                     "geri konur."),
         ("baslik", "Hakkında / İmza"),
         ("paragraf", "Bu pencere TürKod'un sürümünü, lisansını ve **dijital imzasını** gösterir. İmza, bir mektubun "
                      "üstündeki mühür gibidir: program dosyalarının yolda kimse tarafından değiştirilmediğini "

@@ -637,7 +637,8 @@ class GuncellemeTestleri(unittest.TestCase):
         self.assertTrue(sonuc["ok"], sonuc)
         with open(hedef, "rb") as f:
             self.assertEqual(f.read(), b"yeni surum")
-        self.assertEqual(sorted(os.listdir(kok)), ["TurKod-4.1.AppImage", "TurKod.AppImage"])
+        # İndirilen dosya artık gereksiz: yerine konduktan sonra silinir (yer kaplamasın).
+        self.assertEqual(sorted(os.listdir(kok)), ["TurKod.AppImage"])
 
     def test_degistirilmis_dosya_kurulmaz(self):
         kok, indirilen, hedef = self._hazirla(b"kotu", beklenen_icerik=b"iyi")

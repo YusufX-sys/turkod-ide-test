@@ -27,6 +27,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 import base64
 from pathlib import Path
@@ -277,15 +278,46 @@ def _yeni_bildirim_hazirla() -> dict:
     return {"ok": True, "bildirim": m}
 
 
-def indir_ve_dogrula() -> dict:
-    """Bloklayan sürüm (geriye dönük uyumluluk)."""
-    m = dict(_son_bildirim)
-    if not m:
-        r = _yeni_bildirim_hazirla()
-        if not r.get("ok"):
-            return r
-        m = r["bildirim"]
-    return _indir(m)
+_KURULUM_ADI = re.compile(r"^TurKod(?:-Setup)?-(\d+(?:\.\d+)*)(?:\.\d+\.part|\.exe|\.AppImage|\.dmg)$")
+
+
+def eski_kurulumlari_temizle(simdiki_surum=None, parca_yasi_sn=3600) -> int:
+    """İndirme klasöründe kalan, artık gereksiz kurulum dosyalarını siler:
+    sürümü kurulu sürümden büyük olmayan kurulum dosyaları (güncelleme
+    tamamlanmış) ve bir saatten eski yarım (.part) indirmeler. Eskiden kurulum
+    dosyası %TEMP%'te kalıp yer kaplıyordu. İndirme sürerken dokunulmaz.
+    Silinen dosya sayısını döndürür."""
+    with _kilit:
+        if _indirme.get("durum") == "indiriyor":
+            return 0
+        korunan = _indirme.get("yol") if _indirme.get("durum") == "bitti" else ""
+    dizin = indirme_klasoru()
+    if not dizin.is_dir():
+        return 0
+    simdiki = _tuple(simdiki_surum or mevcut_surum())
+    simdi = time.time()
+    silinen = 0
+    for yol in dizin.iterdir():
+        e = _KURULUM_ADI.match(yol.name)
+        if not e or not yol.is_file() or (korunan and str(yol) == korunan):
+            continue
+        try:
+            if yol.name.endswith(".part"):
+                if simdi - yol.stat().st_mtime < parca_yasi_sn:
+                    continue
+            elif _tuple(e.group(1)) > simdiki:
+                # Henüz kurulmamış daha yeni sürüm: kullanıcı belki kuracak.
+                continue
+            yol.unlink()
+            silinen += 1
+        except OSError:
+            pass  # açık / kilitli: bir sonraki açılışta yeniden denenir
+    try:
+        if not any(dizin.iterdir()):
+            dizin.rmdir()
+    except OSError:
+        pass
+    return silinen
 
 
 def indir_baslat() -> dict:
@@ -421,4 +453,11 @@ def uygula(yol: str) -> dict:
                 pass
         return {"ok": False, "hata": f"TürKod dosyası yenilenemedi ({e}). Dosyanın "
                                      "bulunduğu klasöre yazma iznin olduğundan emin ol."}
+    # İndirilen dosya artık gereksiz (içeriği yerine konan kopyada).
+    try:
+        os.remove(yol)
+    except OSError:
+        pass
+    with _kilit:
+        _indirme.update(durum="yok", yol="", sha256="")
     return {"ok": True, "baslat": hedef}

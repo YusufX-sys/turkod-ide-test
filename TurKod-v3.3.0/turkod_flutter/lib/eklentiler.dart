@@ -54,7 +54,7 @@ final List<EklentiTanimi> kEklentiler = [
     id: kEklentiOdak,
     ad: 'Odak Zamanlayıcı',
     aciklama: 'Durum çubuğuna Pomodoro sayacı ekler: 25 dakika çalış, 5 '
-        'dakika mola. Tıkla: başlat/duraklat, sağ tık: sıfırla.',
+        'dakika mola. Tıkla: başlat/duraklat, sağ tık: süreyi seç ya da sıfırla.',
     ikon: Icons.timer_outlined,
     renk: Color(0xFFEF5350),
   ),
@@ -357,7 +357,7 @@ class _EklentilerPaneliState extends State<EklentilerPaneli> {
           child: Text(metin,
               style: theme.textTheme.labelSmall?.copyWith(
                   letterSpacing: 0.6,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
         );
 
     return Container(
@@ -421,8 +421,8 @@ class _YerelAiKarti extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: renk.withOpacity(0.10),
-        border: Border.all(color: renk.withOpacity(0.45)),
+        color: renk.withValues(alpha: 0.10),
+        border: Border.all(color: renk.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -439,7 +439,7 @@ class _YerelAiKarti extends StatelessWidget {
           'Bilgisayarında internetsiz çalışan ücretsiz modeller (llama.cpp): '
           'donanımına ve diskine göre öner, indir, sil. Görevler Ayarlar\'da atanır.',
           style: TextStyle(
-              fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+              fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
         ),
         const SizedBox(height: 4),
         Text(
@@ -489,7 +489,7 @@ class _EklentiKarti extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-                color: e.renk.withOpacity(0.18),
+                color: e.renk.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(6)),
             child: Icon(e.ikon, size: 17, color: e.renk),
           ),
@@ -504,7 +504,7 @@ class _EklentiKarti extends StatelessWidget {
         const SizedBox(height: 6),
         Text(e.aciklama,
             style: TextStyle(
-                fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
         if (gerekliEksik && gerekliAd != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -981,8 +981,8 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
     Widget kutu(List<Widget> cocuklar, {Color? renk}) => Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: (renk ?? theme.colorScheme.primary).withOpacity(0.08),
-            border: Border.all(color: (renk ?? theme.colorScheme.primary).withOpacity(0.4)),
+            color: (renk ?? theme.colorScheme.primary).withValues(alpha: 0.08),
+            border: Border.all(color: (renk ?? theme.colorScheme.primary).withValues(alpha: 0.4)),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: cocuklar),
@@ -1093,7 +1093,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
                 '${(cudaHata['tarih'] ?? '').toString().isNotEmpty ? ' (${cudaHata['tarih']})' : ''}. '
                 'İşlemci sürümü kullanılıyor.',
                 style: TextStyle(
-                    fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.65)),
+                    fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
               ),
               TextButton(
                 style: TextButton.styleFrom(
@@ -1236,8 +1236,8 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
-          color: renk.withOpacity(0.12),
-          border: Border.all(color: renk.withOpacity(0.5)),
+          color: renk.withValues(alpha: 0.12),
+          border: Border.all(color: renk.withValues(alpha: 0.5)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(metin,
@@ -1286,7 +1286,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.15),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8)),
                   child: Text(etiket,
                       style: TextStyle(fontSize: 10, color: theme.colorScheme.primary)),
@@ -1306,7 +1306,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
             const SizedBox(height: 3),
             Text(ayrinti,
                 style: TextStyle(
-                    fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.65))),
+                    fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.65))),
             const SizedBox(height: 3),
             Row(children: [
               Icon(uygun ? (hizli ? Icons.bolt : Icons.check) : Icons.block,
@@ -1391,7 +1391,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
             Text(baslik, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
             Text(alt,
                 style: TextStyle(
-                    fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                    fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
           ]),
         );
     return ListView(padding: const EdgeInsets.only(right: 4), children: [
@@ -1401,7 +1401,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         '(${_gb(kullanilabilir as num?)}) dikkate alındı. Önerilenlerin hepsi '
         '${_gb(o['onerilen_toplam_gb'] as num?)} tutar'
         '${o['hepsi_sigar'] == true ? '.' : '; hepsi birden sığmaz, ihtiyacın olanı indir.'}',
-        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
       ),
       bolum('Hafif modeller — basit görevler',
           'Otomatik tamamlama, kısa açıklamalar. Hızlı, az bellek ve disk ister.'),
@@ -1437,7 +1437,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
         'İndirilen modeller Ayarlar → Yapay Zekâ: Görevler listesinde "TürKod Yerel • '
         'model" olarak çıkar; görevleri orada ata (internet ve API anahtarı gerekmez).'
         '${_motorHazir ? '' : ' Modelleri kullanmak için önce yerel AI motorunu kur.'}',
-        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
       ),
       const SizedBox(height: 8),
       for (final m in yuklu)
@@ -1491,7 +1491,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
                         '${((m['baglam'] as num) / 1024).round()}K bağlam',
                     ].join(' · '),
                     style: TextStyle(
-                        fontSize: 10.5, color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                        fontSize: 10.5, color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
                 if (_kodiRozeti(m) case final rozet?) rozet,
               ],
             ),
@@ -1597,7 +1597,7 @@ class _YerelModelYoneticisiState extends State<YerelModelYoneticisi> {
                 const SizedBox(width: 8),
                 Text('llama.cpp',
                     style: TextStyle(
-                        fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                        fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
                 ],
                 const Spacer(),
                 IconButton(
@@ -1828,7 +1828,7 @@ Future<void> gununGoreviniAc(BuildContext context) async {
             Text('İpucu: ${g.$3}',
                 style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(dc).colorScheme.onSurface.withOpacity(0.65))),
+                    color: Theme.of(dc).colorScheme.onSurface.withValues(alpha: 0.65))),
           ]),
         ),
         actions: [
@@ -2184,6 +2184,36 @@ class _OdakZamanlayiciState extends State<OdakZamanlayici> {
     });
   }
 
+  static const List<int> _sureSecenekleri = [15, 20, 25, 30, 45, 60];
+
+  /// Sağ tık: odak süresini seç ya da sıfırla (eskiden süre hep 25 dakikaydı,
+  /// değiştirmenin bir yolu yoktu).
+  Future<void> _menu(TapDownDetails d) async {
+    final ayarlar = context.read<SettingsProvider>();
+    final simdiki = _odakSn ~/ 60;
+    final kutu = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final secim = await showMenu<int>(
+      context: context,
+      position: RelativeRect.fromRect(
+          d.globalPosition & const Size(1, 1), Offset.zero & kutu.size),
+      items: [
+        const PopupMenuItem<int>(
+            enabled: false, height: 28, child: Text('Odak süresi')),
+        for (final dk in _sureSecenekleri)
+          CheckedPopupMenuItem<int>(
+              value: dk, checked: dk == simdiki, child: Text('$dk dakika')),
+        const PopupMenuDivider(),
+        const PopupMenuItem<int>(value: 0, child: Text('Sıfırla')),
+      ],
+    );
+    if (secim == null || !mounted) return;
+    if (secim > 0 && secim != simdiki) {
+      await ayarlar.setValue('odak_suresi_dk', secim);
+      if (!mounted) return;
+    }
+    _sifirla();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -2194,11 +2224,11 @@ class _OdakZamanlayiciState extends State<OdakZamanlayici> {
     final renk = _mola ? Colors.green.shade400 : theme.colorScheme.error;
     return Tooltip(
       message: '${_mola ? 'Mola' : 'Odak'} zamanlayıcı — tıkla: '
-          '${calisiyor ? 'duraklat' : 'başlat'}, sağ tık: sıfırla '
+          '${calisiyor ? 'duraklat' : 'başlat'}, sağ tık: süre ve sıfırla '
           '(tamamlanan: $_tamamlanan)',
       child: InkWell(
         onTap: _baslatDuraklat,
-        onSecondaryTap: _sifirla,
+        onSecondaryTapDown: _menu,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2209,7 +2239,7 @@ class _OdakZamanlayiciState extends State<OdakZamanlayici> {
                 style: TextStyle(
                     fontSize: 11,
                     fontFeatures: const [FontFeature.tabularFigures()],
-                    color: calisiyor ? renk : theme.colorScheme.onSurface.withOpacity(0.8))),
+                    color: calisiyor ? renk : theme.colorScheme.onSurface.withValues(alpha: 0.8))),
           ]),
         ),
       ),
@@ -2231,7 +2261,7 @@ Future<void> turkodKabuguAc(BuildContext context) async {
         const Padding(
           padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: Text(
-            'CMD tarzı komut satırı: TürKod kodunu satır satır çalıştır, '
+            'Komut satırı: TürKod kodunu satır satır çalıştır, '
             '"dersler" ile TürKod öğren, "düzelt / çalıştır / çevir" komutlarını kullan.',
             style: TextStyle(fontSize: 12),
           ),
@@ -2261,7 +2291,7 @@ Future<void> turkodKabuguAc(BuildContext context) async {
     await context.read<TerminalProvider>().kabukBaslat();
   } else {
     try {
-      final r = await context.read<BackendService>().call('kabuk_penceresi');
+      final r = await context.read<BackendService>().callSonuc('kabuk_penceresi');
       if (r['ok'] != true && context.mounted) {
         showAppSnackbar(context, kabukPenceresiHataMetni(r['hata']),
             kind: SnackKind.error);

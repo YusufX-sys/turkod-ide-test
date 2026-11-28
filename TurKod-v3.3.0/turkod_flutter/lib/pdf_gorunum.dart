@@ -88,6 +88,13 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
     _ayarlar.addListener(_yenile);
     _sayfaOdak.addListener(_yenile);
     _yaziOdak.addListener(_yenile);
+    PdfNotDefteri.acikGorunumler.add(_yarimIsleriBitir);
+  }
+
+  /// Program kapanırken çağrılır (PdfNotDefteri.hepsiniKaydet).
+  void _yarimIsleriBitir() {
+    _yaziyiBitir(yenile: false);
+    _cizimiBitir();
   }
 
   void _yenile() {
@@ -105,6 +112,7 @@ class _PdfSekmesiState extends State<PdfSekmesi> {
 
   @override
   void dispose() {
+    PdfNotDefteri.acikGorunumler.remove(_yarimIsleriBitir);
     PdfSekmesi.sayfaIstegi.removeListener(_sayfaIstegi);
     _ctrl.removeListener(_yakinlikGuncelle);
     _defter.removeListener(_yenile);

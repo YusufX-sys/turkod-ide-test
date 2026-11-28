@@ -129,6 +129,8 @@ Future<void> _guncelle(BuildContext context, BackendCagri cagir,
     );
     return;
   }
+  // Kurulum penceresi programın temasıyla açılır (context, async boşluklardan önce okunur).
+  final renkler = GuncellemeRenkleri.temadan(Theme.of(context));
   final ilerleme = ValueNotifier<double?>(0);
   final metin = ValueNotifier<String>('Güncelleme indiriliyor...');
 
@@ -264,7 +266,7 @@ Future<void> _guncelle(BuildContext context, BackendCagri cagir,
         await Future<void>.delayed(const Duration(seconds: 3));
       default:
         await cagir('guncelleme_kurulum_dogrula', {'yol': yol});
-        await _kurulumuBaslat(yol);
+        await _kurulumuBaslat(yol, renkler, metin: metin);
     }
   } catch (e) {
     kapat();
@@ -284,24 +286,65 @@ Future<void> _guncelle(BuildContext context, BackendCagri cagir,
   exit(0);
 }
 
-/// Kurulumu sessiz modda başlatır ve "TürKod Güncelleniyor..." penceresini açar.
+/// Güncelleme penceresinin renkleri: programın o anki temasından alınır
+/// (açık / koyu, vurgu rengi), böylece pencere TürKod'un bir parçası gibi görünür.
+class GuncellemeRenkleri {
+  final Color zemin, yazi, soluk, vurgu, iz;
+  const GuncellemeRenkleri(
+      {required this.zemin,
+      required this.yazi,
+      required this.soluk,
+      required this.vurgu,
+      required this.iz});
+
+  factory GuncellemeRenkleri.temadan(ThemeData t) {
+    final cs = t.colorScheme;
+    return GuncellemeRenkleri(
+      zemin: cs.surface,
+      yazi: cs.onSurface,
+      soluk: Color.alphaBlend(cs.onSurface.withValues(alpha: 0.62), cs.surface),
+      vurgu: cs.primary,
+      iz: Color.alphaBlend(cs.onSurface.withValues(alpha: 0.12), cs.surface),
+    );
+  }
+
+  static String hex(Color c) {
+    String b(double v) => (v * 255).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
+    return '#${b(c.r)}${b(c.g)}${b(c.b)}';
+  }
+}
+
+/// Kurulumu sessiz modda başlatır. Sıra önemlidir: önce temaya uygun ilerleme
+/// penceresi açılır ve hazır olduğunu bildirir, SONRA kurulum başlar ve TürKod
+/// kapanır. Eskiden önce program kapanıyor, pencere birkaç saniye sonra (bazen
+/// hiç) geliyordu; kullanıcı ne olduğunu anlamadan bekliyordu.
+///
+/// Kurulum her aşamayı (eski sürüm kaldırılıyor, yeni sürüm kuruluyor %NN, son
+/// ayarlar, bitti) /DURUM dosyasına yazar (turkod.iss); pencere gerçek durumu
+/// gösterir. İş bitince pencere kurulum dosyasını siler.
+///
 /// Kurulumu bu (Flutter) süreç başlatır: backend'in alt süreci olsaydı, uygulama
 /// kapanırken onunla birlikte sonlandırılırdı.
-Future<void> _kurulumuBaslat(String kurulumYolu) async {
-  final kurulum = await Process.start(
-    kurulumYolu,
-    const ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'],
-    mode: ProcessStartMode.detached,
-  );
+Future<void> _kurulumuBaslat(String kurulumYolu, GuncellemeRenkleri renk,
+    {ValueNotifier<String>? metin}) async {
+  final dizin = p.dirname(kurulumYolu);
+  final durum = File(p.join(dizin, 'kurulum_durumu.txt'));
+  final hazir = File(p.join(dizin, 'pencere_hazir.txt'));
+  for (final f in [durum, hazir]) {
+    try {
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+  }
 
-  // Pencere açılamazsa (örn. PowerShell kısıtlıysa) güncelleme yine de sürer.
+  // Pencere açılamazsa (örn. PowerShell kısıtlıysa) güncelleme yine de sürer;
+  // kalan kurulum dosyasını TürKod bir sonraki açılışta siler.
   try {
-    final betik = File(p.join(Directory.systemTemp.path, 'turkod_guncelleme_arayuz.ps1'));
+    final betik = File(p.join(dizin, 'turkod_guncelleme_penceresi.ps1'));
     // UTF-8 BOM: Windows PowerShell 5.1 Türkçe karakterleri doğru okusun.
     await betik.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(_arayuzBetigi)]);
     final sistem = Platform.environment['SystemRoot'] ?? r'C:\Windows';
     await Process.start(
-      '$sistem\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      p.join(sistem, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       [
         '-NoProfile',
         '-ExecutionPolicy',
@@ -310,14 +353,46 @@ Future<void> _kurulumuBaslat(String kurulumYolu) async {
         'Hidden',
         '-File',
         betik.path,
-        '-KurulumPid',
-        '${kurulum.pid}',
+        '-KurulumYolu',
+        kurulumYolu,
+        '-DurumDosyasi',
+        durum.path,
+        '-HazirDosyasi',
+        hazir.path,
         '-UygulamaExe',
         Platform.resolvedExecutable,
+        '-Zemin',
+        GuncellemeRenkleri.hex(renk.zemin),
+        '-Yazi',
+        GuncellemeRenkleri.hex(renk.yazi),
+        '-Soluk',
+        GuncellemeRenkleri.hex(renk.soluk),
+        '-Vurgu',
+        GuncellemeRenkleri.hex(renk.vurgu),
+        '-Iz',
+        GuncellemeRenkleri.hex(renk.iz),
       ],
       mode: ProcessStartMode.detached,
     );
+    metin?.value = 'Güncelleme penceresi açılıyor...';
+    // Pencere ekranda görünene dek (en çok 10 sn) TürKod açık kalır.
+    final son = DateTime.now().add(const Duration(seconds: 10));
+    while (!hazir.existsSync() && DateTime.now().isBefore(son)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
   } catch (_) {}
+
+  await Process.start(
+    kurulumYolu,
+    [
+      '/VERYSILENT',
+      '/SUPPRESSMSGBOXES',
+      '/NORESTART',
+      '/CLOSEAPPLICATIONS',
+      '/DURUM=${durum.path}',
+    ],
+    mode: ProcessStartMode.detached,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -494,103 +569,274 @@ class _IlerlemePaneli extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// "TürKod Güncelleniyor..." penceresi (uygulama kapandıktan sonra görünür).
-// Windows PowerShell + WinForms: ek kurulum gerektirmez.
+// ---------------------------------------------------------------------------
+// Güncelleme penceresi (TürKod kapandıktan sonra da ekranda kalır).
+// Windows PowerShell + WinForms: ek kurulum gerektirmez. Renkler programın
+// temasından gelir; kenarsız, yuvarlak köşeli, soldan sağa akan çubuklu.
+// Kurulumun yazdığı durum dosyasını okur (turkod.iss DurumYaz):
+//   kapat -> kaldir -> kur|NN -> ayar -> temizle -> bitti   (geri: yarıda kaldı)
+// İş bitince kurulum dosyasını siler.
 // ---------------------------------------------------------------------------
 const String _arayuzBetigi = r'''
 param(
-    [Parameter(Mandatory = $true)][int]$KurulumPid,
-    [string]$UygulamaExe = ""
+    [Parameter(Mandatory = $true)][string]$KurulumYolu,
+    [Parameter(Mandatory = $true)][string]$DurumDosyasi,
+    [string]$HazirDosyasi = "",
+    [string]$UygulamaExe = "",
+    [string]$Zemin = "#FFFFFF",
+    [string]$Yazi = "#1F2937",
+    [string]$Soluk = "#6B7280",
+    [string]$Vurgu = "#2ECC71",
+    [string]$Iz = "#E5E7EB"
 )
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+# Yüksek DPI ekranda bulanık görünmesin.
+try {
+    Add-Type -Namespace TurKod -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    [void][TurKod.Dpi]::SetProcessDPIAware()
+} catch {}
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-$yesil = [System.Drawing.Color]::FromArgb(46, 204, 113)
-$iz = [System.Drawing.Color]::FromArgb(226, 232, 240)
+function Renk([string]$h) {
+    try { return [System.Drawing.ColorTranslator]::FromHtml($h) } catch { return [System.Drawing.Color]::Gray }
+}
+$cZemin = Renk $Zemin; $cYazi = Renk $Yazi; $cSoluk = Renk $Soluk
+$cVurgu = Renk $Vurgu; $cIz = Renk $Iz
 
 $form = New-Object System.Windows.Forms.Form
+$g = $form.CreateGraphics(); $k = $g.DpiX / 96.0; $g.Dispose()
+function O([double]$v) { return [int][Math]::Round($v * $k) }
+
 $form.Text = "TürKod"
-$form.ClientSize = New-Object System.Drawing.Size(380, 112)
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
-$form.MaximizeBox = $false
-$form.MinimizeBox = $false
-$form.ControlBox = $false
+$form.ClientSize = New-Object System.Drawing.Size((O 440), (O 150))
+$form.BackColor = $cZemin
 $form.TopMost = $true
-$form.BackColor = [System.Drawing.Color]::White
+$form.ShowInTaskbar = $true
+try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($UygulamaExe) } catch {}
 
-$etiket = New-Object System.Windows.Forms.Label
-$etiket.Text = "TürKod Güncelleniyor..."
-$etiket.Font = New-Object System.Drawing.Font("Segoe UI", 13)
-$etiket.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-$etiket.SetBounds(10, 16, 360, 34)
-$form.Controls.Add($etiket)
+# Yuvarlak köşeler.
+$r = O 14
+$yol = New-Object System.Drawing.Drawing2D.GraphicsPath
+$w = $form.ClientSize.Width; $h = $form.ClientSize.Height
+$yol.AddArc(0, 0, $r * 2, $r * 2, 180, 90)
+$yol.AddArc($w - $r * 2, 0, $r * 2, $r * 2, 270, 90)
+$yol.AddArc($w - $r * 2, $h - $r * 2, $r * 2, $r * 2, 0, 90)
+$yol.AddArc(0, $h - $r * 2, $r * 2, $r * 2, 90, 90)
+$yol.CloseFigure()
+$form.Region = New-Object System.Drawing.Region($yol)
+$form.Add_Paint({
+    param($s, $e)
+    $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $kalem = New-Object System.Drawing.Pen($cIz, [single](O 2))
+    $e.Graphics.DrawPath($kalem, $yol)
+    $kalem.Dispose()
+})
 
-$kutu = New-Object System.Windows.Forms.Panel
-$kutu.SetBounds(24, 66, 332, 14)
-$kutu.BackColor = $iz
-$form.Controls.Add($kutu)
+# Pencere sürüklenebilir (kenarlık yok).
+$script:surukle = $null
+$form.Add_MouseDown({ param($s, $e) $script:surukle = $e.Location })
+$form.Add_MouseUp({ $script:surukle = $null })
+$form.Add_MouseMove({
+    param($s, $e)
+    if ($script:surukle -ne $null) {
+        $form.Left += $e.X - $script:surukle.X
+        $form.Top += $e.Y - $script:surukle.Y
+    }
+})
 
-$dolgu = New-Object System.Windows.Forms.Panel
-$dolgu.SetBounds(0, 0, 0, 14)
-$dolgu.BackColor = $yesil
-$kutu.Controls.Add($dolgu)
+$baslik = New-Object System.Windows.Forms.Label
+$baslik.Text = "TürKod güncelleniyor"
+$baslik.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 13)
+$baslik.ForeColor = $cYazi
+$baslik.BackColor = [System.Drawing.Color]::Transparent
+$baslik.SetBounds((O 28), (O 22), (O 384), (O 30))
+$form.Controls.Add($baslik)
 
-$script:surec = $null
-try {
-    $script:surec = [System.Diagnostics.Process]::GetProcessById($KurulumPid)
-    $null = $script:surec.Handle
-} catch {
-    $script:surec = $null
-}
-$script:baslangic = Get-Date
-$script:yuzde = 0.0
+$asama = New-Object System.Windows.Forms.Label
+$asama.Text = "TürKod kapatılıyor..."
+$asama.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
+$asama.ForeColor = $cSoluk
+$asama.BackColor = [System.Drawing.Color]::Transparent
+$asama.SetBounds((O 28), (O 56), (O 300), (O 22))
+$form.Controls.Add($asama)
+
+$yuzdeEtiket = New-Object System.Windows.Forms.Label
+$yuzdeEtiket.Text = "%0"
+$yuzdeEtiket.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$yuzdeEtiket.ForeColor = $cYazi
+$yuzdeEtiket.BackColor = [System.Drawing.Color]::Transparent
+$yuzdeEtiket.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+$yuzdeEtiket.SetBounds((O 332), (O 56), (O 80), (O 22))
+$form.Controls.Add($yuzdeEtiket)
+
+$not = New-Object System.Windows.Forms.Label
+$not.Text = "Lütfen bilgisayarı kapatma. Bitince TürKod kendiliğinden açılacak."
+$not.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$not.ForeColor = $cSoluk
+$not.BackColor = [System.Drawing.Color]::Transparent
+$not.SetBounds((O 28), (O 112), (O 384), (O 20))
+$form.Controls.Add($not)
+
+# Çubuk: dolu kısım vurgu renginde, içinde soldan sağa akan parlak bir şerit.
+$cubuk = New-Object System.Windows.Forms.PictureBox
+$cubuk.SetBounds((O 28), (O 86), (O 384), (O 10))
+$cubuk.BackColor = $cZemin
+$form.Controls.Add($cubuk)
+
+$script:goster = 0.0     # ekrandaki yüzde (yumuşak)
+$script:hedef = 2.0      # durumdan gelen yüzde
+$script:akis = 0.0       # şeridin yeri
+$script:durum = ""
 $script:bitti = $false
-$script:bitisZamani = Get-Date
-$script:kod = 0
+$script:hata = $false
+$script:bitisZamani = $null
+$script:baslangic = Get-Date
+$script:sonDegisim = Get-Date
+
+function Yuvarlak($gr, $firca, [single]$x, [single]$y, [single]$en, [single]$boy) {
+    if ($en -le 0) { return }
+    $d = [Math]::Min($boy, $en)
+    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $p.AddArc($x, $y, $d, $boy, 90, 180)
+    $p.AddArc($x + $en - $d, $y, $d, $boy, 270, 180)
+    $p.CloseFigure()
+    $gr.FillPath($firca, $p)
+    $p.Dispose()
+}
+
+$cubuk.Add_Paint({
+    param($s, $e)
+    $gr = $e.Graphics
+    $gr.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $en = [single]$cubuk.Width; $boy = [single]$cubuk.Height
+    $f1 = New-Object System.Drawing.SolidBrush($cIz)
+    Yuvarlak $gr $f1 0 0 $en $boy
+    $f1.Dispose()
+    $dolu = [single]($en * $script:goster / 100.0)
+    if ($dolu -lt $boy) { $dolu = [Math]::Min($boy, $en) }
+    $f2 = New-Object System.Drawing.SolidBrush($cVurgu)
+    Yuvarlak $gr $f2 0 0 $dolu $boy
+    $f2.Dispose()
+    # Akan parlaklık (yalnızca dolu kısmın içinde).
+    $genislik = [single](O 90)
+    $x = [single](($script:akis % ($dolu + $genislik)) - $genislik)
+    $acik = [System.Drawing.Color]::FromArgb(110, 255, 255, 255)
+    $saydam = [System.Drawing.Color]::FromArgb(0, 255, 255, 255)
+    $dik = New-Object System.Drawing.RectangleF($x, 0, $genislik, $boy)
+    $parlak = New-Object System.Drawing.Drawing2D.LinearGradientBrush($dik, $saydam, $acik, [single]0)
+    $bl = New-Object System.Drawing.Drawing2D.Blend
+    $bl.Factors = [single[]](0, 1, 0)
+    $bl.Positions = [single[]](0, 0.5, 1)
+    $parlak.Blend = $bl
+    $gr.SetClip((New-Object System.Drawing.RectangleF(0, 0, $dolu, $boy)))
+    $gr.FillRectangle($parlak, $dik)
+    $gr.ResetClip()
+    $parlak.Dispose()
+})
+
+function DurumOku {
+    try {
+        if (Test-Path -LiteralPath $DurumDosyasi) {
+            return ([System.IO.File]::ReadAllText($DurumDosyasi)).Trim()
+        }
+    } catch {}
+    return ""
+}
+
+# Kurulum dosyası hâlâ çalışıyor mu? (Çalışan programın dosyası kilitlidir.)
+function KurulumCalisiyor {
+    if (-not (Test-Path -LiteralPath $KurulumYolu)) { return $false }
+    try {
+        $fs = [System.IO.File]::Open($KurulumYolu, 'Open', 'ReadWrite', 'None')
+        $fs.Close()
+        return $false
+    } catch { return $true }
+}
+
+function Bitir([bool]$basarili) {
+    $script:bitti = $true
+    $script:hata = -not $basarili
+    $script:bitisZamani = Get-Date
+    if ($basarili) {
+        $script:hedef = 100.0
+        $asama.Text = "Güncelleme tamamlandı"
+        $not.Text = "TürKod açılıyor..."
+    }
+}
 
 $zaman = New-Object System.Windows.Forms.Timer
-$zaman.Interval = 50
+$zaman.Interval = 30
 $zaman.Add_Tick({
-    $gecen = ((Get-Date) - $script:baslangic).TotalSeconds
+    $simdi = Get-Date
     if (-not $script:bitti) {
-        $bitmis = $true
-        if ($script:surec -ne $null) {
-            try { $bitmis = $script:surec.HasExited } catch { $bitmis = $true }
+        $d = DurumOku
+        if ($d -ne $script:durum) { $script:durum = $d; $script:sonDegisim = $simdi }
+        $parca = $d.Split('|')
+        switch ($parca[0]) {
+            "kapat"   { $asama.Text = "TürKod kapatılıyor..."; $script:hedef = 5 }
+            "kaldir"  { $asama.Text = "Eski sürüm kaldırılıyor..."; $script:hedef = 10 }
+            "kur"     {
+                $n = 0; [void][int]::TryParse($parca[1], [ref]$n)
+                $asama.Text = "Yeni sürüm kuruluyor..."
+                $script:hedef = 12 + $n * 0.78
+            }
+            "ayar"    { $asama.Text = "Son ayarlar yapılıyor..."; $script:hedef = 93 }
+            "temizle" { $asama.Text = "Eski sürümün dosyaları siliniyor..."; $script:hedef = 97 }
+            "bitti"   { Bitir $true }
+            "geri"    { Bitir $false }
         }
-        if ($gecen -gt 900) { $bitmis = $true }
-        if ($bitmis) {
-            $script:bitti = $true
-            $script:bitisZamani = Get-Date
-            try { $script:kod = $script:surec.ExitCode } catch { $script:kod = 0 }
+        $gecen = ($simdi - $script:baslangic).TotalSeconds
+        # Kurulum hiç durum yazmadan kapandıysa (başlayamadı / çöktü) ya da
+        # 20 dakikayı aştıysa iş biter.
+        if (-not $script:bitti -and $gecen -gt 12 -and -not (KurulumCalisiyor)) {
+            if ($script:durum -eq "") { Bitir $false } else { Start-Sleep -Milliseconds 300; if ((DurumOku) -eq "bitti") { Bitir $true } else { Bitir $false } }
         }
+        if (-not $script:bitti -and $gecen -gt 1200) { Bitir $false }
     }
-    if ($script:bitti) {
-        $hedef = 100.0
-    } else {
-        $hedef = 93.0 * (1.0 - [Math]::Exp(-$gecen / 15.0))
-    }
-    $script:yuzde = $script:yuzde + ($hedef - $script:yuzde) * 0.12
-    $dolgu.Width = [int][Math]::Round($kutu.Width * $script:yuzde / 100.0)
-    if ($script:bitti -and (((Get-Date) - $script:bitisZamani).TotalSeconds -gt 1.2)) {
+    $script:goster = $script:goster + ($script:hedef - $script:goster) * 0.08
+    $yuzdeEtiket.Text = "%" + [int][Math]::Floor($script:goster + 0.3)
+    $script:akis += (O 6)
+    $cubuk.Invalidate()
+    if ($script:bitti -and (($simdi - $script:bitisZamani).TotalSeconds -gt 1.6 -or $script:hata)) {
         $zaman.Stop()
         $form.Close()
     }
 })
-$zaman.Start()
+
+$form.Add_Shown({
+    $form.Activate()
+    if ($HazirDosyasi) { try { Set-Content -LiteralPath $HazirDosyasi -Value "1" } catch {} }
+    $zaman.Start()
+})
 
 [void]$form.ShowDialog()
 
-if ($script:kod -ne 0) {
+if ($script:hata) {
     [void][System.Windows.Forms.MessageBox]::Show(
-        "Güncelleme tamamlanamadı (hata kodu $($script:kod)).`nTürKod önceki sürümle yeniden açılıyor.",
+        "Güncelleme tamamlanamadı. TürKod'un önceki sürümü yerinde duruyor ve yeniden açılıyor.`nDaha sonra Güncelleştirmeler menüsünden yeniden deneyebilirsin.",
         "TürKod",
         [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Warning)
-    if ($UygulamaExe -and (Test-Path $UygulamaExe)) {
+    if ($UygulamaExe -and (Test-Path -LiteralPath $UygulamaExe)) {
         Start-Process -FilePath $UygulamaExe
     }
 }
+
+# Kurulum dosyası artık gereksiz: kurulum programı kapanınca silinir (en çok 2 dk).
+$son = (Get-Date).AddMinutes(2)
+while ((Get-Date) -lt $son) {
+    try {
+        if (Test-Path -LiteralPath $KurulumYolu) { Remove-Item -LiteralPath $KurulumYolu -Force -ErrorAction Stop }
+        break
+    } catch { Start-Sleep -Milliseconds 500 }
+}
+foreach ($f in @($DurumDosyasi, $HazirDosyasi)) {
+    if ($f) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } catch {} }
+}
+# Betiğin kendisi de silinir.
+try { Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue } catch {}
 ''';

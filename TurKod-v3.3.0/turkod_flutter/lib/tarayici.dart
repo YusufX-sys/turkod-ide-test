@@ -1155,6 +1155,7 @@ class _KurulumRehberiState extends State<_KurulumRehberi> {
 
   Future<void> _yapistir() async {
     final v = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
     if (v?.text != null) setState(() => _anahtar.text = v!.text!.trim());
   }
 

@@ -22,6 +22,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 
 try:
     from .runner import RUNNER_ORTAK, oneri_tablolarini_yerlestir
@@ -578,6 +579,8 @@ class DebugOturumu:
     """
 
     BAGLANTI_ZAMAN_ASIMI = 15
+    # Bağlanan tarafın ilk satırı ("merhaba" + jeton) göndermesi için süre.
+    MERHABA_ZAMAN_ASIMI = 5
 
     def __init__(self, python_exe, python_kodu, breakpointler, ilk_satirda_dur,
                  env=None, popen_ek=None, on_olay=None, gecici_dizin=None,
@@ -654,22 +657,45 @@ class DebugOturumu:
             except Exception:
                 pass
 
+    def _merhaba_oku(self, baglanti, sure):
+        """Bağlantının ilk satırı doğru jetonlu "merhaba" ise okuyucuyu,
+        değilse (yanlış jeton, bozuk veri, hiç yazmadı, koptu) None döner."""
+        okuyucu = None
+        try:
+            baglanti.settimeout(max(0.05, sure))
+            okuyucu = baglanti.makefile("r", encoding="utf-8", newline="\n")
+            merhaba = json.loads(okuyucu.readline(65536))
+            if isinstance(merhaba, dict) and merhaba.get("tip") == "merhaba" \
+                    and merhaba.get("token") == self._token:
+                return okuyucu
+        except Exception:
+            pass
+        if okuyucu is not None:
+            try:
+                okuyucu.close()
+            except Exception:
+                pass
+        return None
+
     def _kabul_et(self):
         try:
-            self._sunucu.settimeout(self.BAGLANTI_ZAMAN_ASIMI)
+            # Yabancı ya da bozuk bir bağlantı yalnızca kendisini kapatır;
+            # bekleme genel süre sınırına (BAGLANTI_ZAMAN_ASIMI) kadar sürer.
+            son = time.monotonic() + self.BAGLANTI_ZAMAN_ASIMI
             while True:
+                kalan = son - time.monotonic()
+                if kalan <= 0:
+                    return
+                self._sunucu.settimeout(kalan)
                 baglanti, _ = self._sunucu.accept()
-                baglanti.settimeout(self.BAGLANTI_ZAMAN_ASIMI)
-                okuyucu = baglanti.makefile("r", encoding="utf-8", newline="\n")
-                ilk = okuyucu.readline()
-                try:
-                    merhaba = json.loads(ilk)
-                except Exception:
-                    merhaba = {}
-                if merhaba.get("tip") == "merhaba" and merhaba.get("token") == self._token:
+                okuyucu = self._merhaba_oku(
+                    baglanti, min(self.MERHABA_ZAMAN_ASIMI, son - time.monotonic()))
+                if okuyucu is not None:
                     break
-                # Yabancı bağlantı (token yanlış): kapat, beklemeye devam et.
-                baglanti.close()
+                try:
+                    baglanti.close()
+                except Exception:
+                    pass
             baglanti.settimeout(None)
             self._baglanti = baglanti
             self._yazici = baglanti.makefile("w", encoding="utf-8", newline="\n")

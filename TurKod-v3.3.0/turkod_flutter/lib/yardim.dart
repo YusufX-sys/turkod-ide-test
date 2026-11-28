@@ -193,7 +193,7 @@ void lisanslariGoster(BuildContext context) {
             child: Text('Diğer açık kaynak lisansları',
                 style: TextStyle(
                     fontSize: 12,
-                    color: tema.colorScheme.onSurface.withOpacity(0.6))),
+                    color: tema.colorScheme.onSurface.withValues(alpha: 0.6))),
           ),
           FilledButton(
               onPressed: () => Navigator.pop(dc), child: const Text('Kapat')),

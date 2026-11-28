@@ -1126,15 +1126,23 @@ class KodiProvider extends ChangeNotifier {
     }
   }
 
+  String? _sonSesHatasi;
+
   /// Cevabı Kodi'nin sesiyle okur (bitene ya da susturulana dek bekler).
   Future<void> seslendir(String metin) async {
     if (metin.trim().isEmpty) return;
     konusuyor = true;
     notifyListeners();
     try {
-      final r = await _backend.call('kodi_seslendir', {'metin': metin});
-      if (r['ok'] != true && r['hata'] != null) {
-        mesajlar.add(KodiMesaji(true, r['hata'].toString(), hata: true, yazilsin: false));
+      final r = await _backend.callSonuc('kodi_seslendir', {'metin': metin});
+      // Ses programı yoksa (Linux'ta espeak-ng ...) sunucunun "şu paketi kur"
+      // iletisi gösterilir; aynı ileti her cevapta yinelenmez.
+      final hata = r['ok'] != true ? r['hata']?.toString() : null;
+      if (hata != null && hata.isNotEmpty && hata != _sonSesHatasi) {
+        _sonSesHatasi = hata;
+        mesajlar.add(KodiMesaji(true, hata, hata: true, yazilsin: false));
+      } else if (r['ok'] == true) {
+        _sonSesHatasi = null;
       }
     } catch (_) {
     } finally {
@@ -1155,7 +1163,7 @@ class KodiProvider extends ChangeNotifier {
     notifyListeners();
     Map<String, dynamic> r;
     try {
-      r = await _backend.call('kodi_dinle');
+      r = await _backend.callSonuc('kodi_dinle');
     } catch (e) {
       r = {'ok': false, 'hata': 'Eyvah, TürKod motoruna ulaşamadım ($e)'};
     }
@@ -1376,7 +1384,7 @@ class KodiProvider extends ChangeNotifier {
               ? await anaPencereGoruntusu()
               : null;
       if (no != _istek) return; // kullanıcı vazgeçti
-      final r = await _backend.call('kodi_sor', {
+      final r = await _backend.callSonuc('kodi_sor', {
         'mesaj': soru,
         if (pencereGoruntusu != null) 'pencere_goruntusu': pencereGoruntusu,
         'dusunme': dusunme,

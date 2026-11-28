@@ -226,10 +226,13 @@ class PdfNotDefteri extends ChangeNotifier {
     });
   }
 
-  /// PDF yolundan dosya adına uygun, sisteme göre değişmeyen anahtar
-  /// (büyük / küçük harf ve ayraç farkı aynı dosyayı gösterir).
-  static String pdfAnahtari(String pdfYolu) {
-    final yol = p.normalize(p.absolute(pdfYolu)).replaceAll('\\', '/').toLowerCase();
+  /// PDF yolundan dosya adına uygun anahtar. Ayraç farkı aynı dosyayı gösterir;
+  /// büyük / küçük harf farkı Windows ve macOS'ta aynı, Linux'ta ayrı dosyadır
+  /// (yollarAyniMi ile aynı kural; eskiden Linux'ta "Ders.pdf" ile "ders.pdf"
+  /// aynı not dosyasını paylaşıyordu).
+  static String pdfAnahtari(String pdfYolu, [Isletim? isletim]) {
+    var yol = p.normalize(p.absolute(pdfYolu)).replaceAll('\\', '/');
+    if ((isletim ?? suankiIsletim) != Isletim.linux) yol = yol.toLowerCase();
     // FNV-1a, 64 bit.
     var h = 0xcbf29ce484222325;
     for (final b in utf8.encode(yol)) {
@@ -378,9 +381,31 @@ class PdfNotDefteri extends ChangeNotifier {
     if (_kayit != null) kaydet();
   }
 
+  /// Açık PDF görünümlerinin yarım işlerini (yazılmakta olan not, çizilmekte
+  /// olan çizgi) deftere geçiren işlevler; görünüm açılınca eklenir.
+  static final Set<VoidCallback> acikGorunumler = {};
+
+  /// Program kapanırken: yarım yazı ve çizgiler bitirilir, bekleyen bütün
+  /// defterler hemen diske yazılır (masaüstünde çıkışta dispose çağrılmaz;
+  /// eskiden son not ve son çizgi kayboluyordu).
+  static void hepsiniKaydet() {
+    for (final bitir in acikGorunumler.toList()) {
+      try {
+        bitir();
+      } catch (_) {}
+    }
+    for (final d in _defterler.values) {
+      d.silmeyiBitir();
+      d.bekleyeniKaydet();
+    }
+  }
+
   /// Testler arasında defterleri unutur.
   @visibleForTesting
-  static void hepsiniUnut() => _defterler.clear();
+  static void hepsiniUnut() {
+    _defterler.clear();
+    acikGorunumler.clear();
+  }
 }
 
 /// Araçların ayarları (renk, kalınlık, boyut); bütün PDF'lerde ortaktır ve

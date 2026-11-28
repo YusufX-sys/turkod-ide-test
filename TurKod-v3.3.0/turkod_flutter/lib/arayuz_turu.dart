@@ -47,6 +47,12 @@ class TurAdimi {
   });
 }
 
+/// Tur metnindeki {eylem.kimliği} yer tutucularını kullanıcının şu anki
+/// kısayoluyla değiştiren işlev (main.dart'taki kisayolluIpucuMetni bağlanır;
+/// bağlanmazsa yer tutucular yalnızca silinir).
+String Function(String metin) turKisayolCevirici = (m) =>
+    m.replaceAll(RegExp(r' ?\(?\{[a-z_]+\.[a-z_]+\}\)?'), '');
+
 List<TurAdimi> varsayilanTurAdimlari() => [
       const TurAdimi(
         ikon: Icons.waving_hand_outlined,
@@ -78,7 +84,7 @@ List<TurAdimi> varsayilanTurAdimlari() => [
         hedef: TurHedefleri.calistir,
         ikon: Icons.play_arrow_rounded,
         baslik: 'Çalıştır ve Durdur',
-        metin: 'Yeşil Çalıştır düğmesi kodunu çalıştırır (Ctrl+R); yanındaki '
+        metin: 'Yeşil Çalıştır düğmesi kodunu çalıştırır ({run.run}); yanındaki '
             'kare, çalışan programı durdurur.',
       ),
       TurAdimi(
@@ -108,7 +114,7 @@ List<TurAdimi> varsayilanTurAdimlari() => [
         ikon: Icons.tab_outlined,
         baslik: 'Sekmeler',
         metin: 'Açık dosyaların her biri bir sekme. Kaydedilmemiş sekmede adın '
-            'yanında bir nokta görünür. + ile yeni sekme açılır (Ctrl+T).',
+            'yanında bir nokta görünür. + ile yeni sekme açılır ({file.new_tab}).',
       ),
       TurAdimi(
         hedef: TurHedefleri.editor,
@@ -553,7 +559,7 @@ class _AciklamaKutusu extends StatelessWidget {
                           color: cs.onSurface.withValues(alpha: 0.6))),
                 ]),
                 const SizedBox(height: 10),
-                Text(kisayolluMetin(adim.metin), // macOS'ta Ctrl yerine Cmd
+                Text(turKisayolCevirici(kisayolluMetin(adim.metin)), // macOS'ta Ctrl yerine Cmd
                     style: tema.textTheme.bodyMedium?.copyWith(height: 1.4)),
                 if (adim.ipucu != null) ...[
                   const SizedBox(height: 8),
@@ -561,7 +567,7 @@ class _AciklamaKutusu extends StatelessWidget {
                     Icon(Icons.lightbulb_outline, size: 15, color: cs.tertiary),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(kisayolluMetin(adim.ipucu!),
+                      child: Text(turKisayolCevirici(kisayolluMetin(adim.ipucu!)),
                           style: tema.textTheme.bodySmall?.copyWith(
                               color: cs.onSurface.withValues(alpha: 0.75))),
                     ),

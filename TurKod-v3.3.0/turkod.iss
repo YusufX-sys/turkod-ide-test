@@ -166,6 +166,8 @@ Type: files; Name: "{app}\backend\.turkod_kelimeler.json"
 ; Setup onu kendisi kaldırır.
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\data"
+; Yarıda kalmış bir güncellemeden kalan eski sürüm kopyası.
+Type: filesandordirs; Name: "{app}\_eski_surum"
 
 [Run]
 Filename: "{app}\turkod_flutter.exe"; Description: "TürKod'u başlat"; Flags: nowait postinstall skipifsilent
@@ -296,16 +298,175 @@ begin
   end;
 end;
 
+// --- Uygulama içi güncellemenin durumu ve güvenli değiştirme ------------------
+// Uygulama içi güncelleme kurulumu /DURUM="<dosya>" ile başlatır. Kurulum her
+// aşamada bu dosyaya tek satır yazar ("asama" ya da "asama|yuzde"; yalnızca ASCII).
+// TürKod'un ilerleme penceresi bu dosyayı okuyup gerçek durumu gösterir.
+var
+  SonYuzde: Integer;
+  EskiTasindi: Boolean;
+  KurulumBitti: Boolean;
+
+procedure DurumYaz(Satir: String);
+var
+  Yol: String;
+begin
+  Yol := ExpandConstant('{param:DURUM|}');
+  if Yol <> '' then SaveStringToFile(Yol, Satir, False);
+end;
+
+// Güncellemede silinip yeniden yazılan her şey önce {app}\_eski_surum içine
+// TAŞINIR (aynı diskte ad değiştirme: hızlı, kopya yok). Kurulum başarıyla
+// biterse bu klasör silinir; yarıda kalırsa (hata, elektrik, iptal) yeni
+// yarım dosyalar atılıp eskiler geri konur: TürKod bozuk kalmaz.
+function EskiKlasoru: String;
+begin
+  Result := ExpandConstant('{app}\_eski_surum');
+end;
+
+procedure EskiyiTasi(Goreli: String);
+var
+  Kaynak, Hedef: String;
+begin
+  Kaynak := ExpandConstant('{app}\') + Goreli;
+  Hedef := EskiKlasoru + '\' + Goreli;
+  if not (FileExists(Kaynak) or DirExists(Kaynak)) then Exit;
+  ForceDirectories(ExtractFileDir(Hedef));
+  if RenameFile(Kaynak, Hedef) then
+    EskiTasindi := True
+  else
+    Log('Eski sürüm kenara alınamadı: ' + Kaynak);
+end;
+
+procedure EskiyiGeriKoy(Goreli: String);
+var
+  Kaynak, Hedef: String;
+begin
+  Kaynak := EskiKlasoru + '\' + Goreli;
+  Hedef := ExpandConstant('{app}\') + Goreli;
+  if not (FileExists(Kaynak) or DirExists(Kaynak)) then Exit;
+  if DirExists(Hedef) then DelTree(Hedef, True, True, True)
+  else if FileExists(Hedef) then DeleteFile(Hedef);
+  if not RenameFile(Kaynak, Hedef) then Log('Eski sürüm geri konamadı: ' + Hedef);
+end;
+
+// Kenara alınanların listesi (kurulumun [InstallDelete] ile sildikleri ve
+// yeniden yazdığı programlar). Kökteki DLL'ler adlarıyla tek tek taşınır.
+procedure EskiListesi(Liste: TStringList);
+var
+  Bul: TFindRec;
+begin
+  Liste.Add('data');
+  Liste.Add('belgeler');
+  Liste.Add('backend\_internal');
+  Liste.Add('backend\turkod_backend.exe');
+  Liste.Add('backend\turkod.exe');
+  Liste.Add('turkod_flutter.exe');
+  if FindFirst(ExpandConstant('{app}\*.dll'), Bul) then
+  try
+    repeat
+      Liste.Add(Bul.Name);
+    until not FindNext(Bul);
+  finally
+    FindClose(Bul);
+  end;
+end;
+
+procedure EskiSurumuKenaraAl;
+var
+  Liste: TStringList;
+  I: Integer;
+begin
+  // Önceki bir güncellemeden kalan klasör varsa önce o silinir.
+  if DirExists(EskiKlasoru) then DelTree(EskiKlasoru, True, True, True);
+  Liste := TStringList.Create;
+  try
+    EskiListesi(Liste);
+    for I := 0 to Liste.Count - 1 do EskiyiTasi(Liste[I]);
+  finally
+    Liste.Free;
+  end;
+end;
+
+procedure EskiSurumuGeriYukle;
+var
+  Liste: TStringList;
+  Bul: TFindRec;
+  I: Integer;
+begin
+  Liste := TStringList.Create;
+  try
+    Liste.Add('data');
+    Liste.Add('belgeler');
+    Liste.Add('backend\_internal');
+    Liste.Add('backend\turkod_backend.exe');
+    Liste.Add('backend\turkod.exe');
+    Liste.Add('turkod_flutter.exe');
+    // Kenara alınmış DLL'ler (yenileri yarım kalmış olabilir).
+    if FindFirst(EskiKlasoru + '\*.dll', Bul) then
+    try
+      repeat
+        Liste.Add(Bul.Name);
+      until not FindNext(Bul);
+    finally
+      FindClose(Bul);
+    end;
+    for I := 0 to Liste.Count - 1 do EskiyiGeriKoy(Liste[I]);
+  finally
+    Liste.Free;
+  end;
+  DelTree(EskiKlasoru, True, True, True);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  DurumYaz('kapat');
   BackendiDurdur;
   Result := '';
 end;
 
+procedure CurInstallProgressChanged(CurProgress, MaxProgress: Integer);
+var
+  Yuzde: Integer;
+begin
+  if MaxProgress <= 0 then Exit;
+  Yuzde := (CurProgress * 100) div MaxProgress;
+  if Yuzde <> SonYuzde then
+  begin
+    SonYuzde := Yuzde;
+    DurumYaz('kur|' + IntToStr(Yuzde));
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  // Görev kaldırıldıysa (yeniden kurulumda işaret kaldırılmışsa) eski girdi de silinir.
-  if CurStep = ssPostInstall then PathGuncelle(WizardIsTaskSelected('path'));
+  if CurStep = ssInstall then
+  begin
+    SonYuzde := -1;
+    DurumYaz('kaldir');
+    EskiSurumuKenaraAl;
+    DurumYaz('kur|0');
+  end;
+  if CurStep = ssPostInstall then
+  begin
+    DurumYaz('ayar');
+    // Görev kaldırıldıysa (yeniden kurulumda işaret kaldırılmışsa) eski girdi de silinir.
+    PathGuncelle(WizardIsTaskSelected('path'));
+    DurumYaz('temizle');
+    if DirExists(EskiKlasoru) then DelTree(EskiKlasoru, True, True, True);
+    KurulumBitti := True;
+    DurumYaz('bitti');
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  // Kurulum yarıda kaldıysa eski sürüm geri konur.
+  if EskiTasindi and not KurulumBitti then
+  begin
+    EskiSurumuGeriYukle;
+    DurumYaz('geri');
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
