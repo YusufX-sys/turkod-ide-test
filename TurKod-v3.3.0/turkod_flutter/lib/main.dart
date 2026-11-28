@@ -11348,6 +11348,26 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  /// Seçim metnin dışında kaldıysa (metin kısaldı / sekme kapanıp editör
+  /// boşaldı) metnin içine çekilir. Eskiden kapanan sekmenin seçimi (ör. 2.
+  /// satırın sonu) boş editörde kalıyor, editöre tıklanınca editör olmayan
+  /// satıra erişip hata veriyordu (Linux arayüz denemesinde görüldü).
+  void _secimiSinirla() {
+    final satirlar = _reCtrl.codeLines;
+    if (satirlar.length == 0) return;
+    final s = _reCtrl.selection;
+    final son = satirlar.length - 1;
+    int satir(int i) => i.clamp(0, son);
+    int sutun(int i, int o) => o.clamp(0, satirlar[satir(i)].text.length);
+    final bi = satir(s.baseIndex), ei = satir(s.extentIndex);
+    final bo = sutun(s.baseIndex, s.baseOffset), eo = sutun(s.extentIndex, s.extentOffset);
+    if (bi == s.baseIndex && ei == s.extentIndex && bo == s.baseOffset && eo == s.extentOffset) {
+      return;
+    }
+    _reCtrl.selection = s.copyWith(
+        baseIndex: bi, baseOffset: bo, extentIndex: ei, extentOffset: eo);
+  }
+
   bool _reSelectionMatches(re.CodeLineSelection s) {
     final cur = _reCtrl.selection;
     return cur.baseIndex == s.baseIndex &&
@@ -12514,6 +12534,7 @@ class _CodeEditorState extends State<CodeEditor> {
       if (codeSel != null && (!textSame || !selSame)) {
         _reCtrl.selection = codeSel;
       }
+      _secimiSinirla();
     } finally {
       _reCtrl.addListener(_onReSelectionOrTextChange);
       _syncingRe = false;
